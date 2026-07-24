@@ -67,7 +67,7 @@ fun MediaHubScreen() {
                         }
                     }
 
-                    Spacer(modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     Text(
                         text = "Place a video named exactly virtual.mp4 into the Camera1 folder. Resolution should match the target app's preview.",

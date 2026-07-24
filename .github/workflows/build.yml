@@ -36,14 +36,10 @@ jobs:
             gradle wrapper --gradle-version 8.9 --distribution-type bin
           fi
           chmod +x gradlew
-          ls -la
 
       - name: Build Debug APK
         working-directory: manager-app
-        run: |
-          ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log
-          # Also print any e: lines for easy diagnosis
-          grep -E "^e: |error:|FAILED|Unresolved" build.log || true
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Build Release APK
         working-directory: manager-app
