@@ -33,8 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier as ComposeModifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.\u004dodifier as ComposeModifier
 import com.virtualcam.manager.data.AutoSetup
 import com.virtualcam.manager.data.PrerequisiteChecker
 import com.virtualcam.manager.data.PrerequisiteStatus
@@ -87,7 +87,11 @@ fun HomeScreen() {
         }
     ) { padding ->
         Column(
-            modifier = ComposeModifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
+            modifier = ComposeModifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("One-tap control", style = MaterialTheme.typography.titleLarge)
@@ -97,15 +101,24 @@ fun HomeScreen() {
                     containerColor = if (enabled) Success.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Column(modifier = ComposeModifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = ComposeModifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(
                         modifier = ComposeModifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = ComposeModifier.weight(1f)) {
-                            Text(if (enabled) "VirtualCam is ON" else "VirtualCam is OFF", style = MaterialTheme.typography.titleMedium)
-                            Text(if (enabled) "enabled=1" else "Tap to activate", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (enabled) "VirtualCam is ON" else "VirtualCam is OFF",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                if (enabled) "enabled=1" else "Tap to activate",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                         Switch(
                             checked = enabled,
