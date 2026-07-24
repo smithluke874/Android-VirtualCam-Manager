@@ -89,17 +89,19 @@ jobs:
             cp libs/armeabi-v7a/libvirtualcam.so ../magisk-module/zygisk/armeabi-v7a.so 2>/dev/null || true
             cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so 2>/dev/null || true
             echo "Zygisk .so packaged"
+            ls -la ../magisk-module/zygisk/
           fi
 
       - name: Package Magisk zip
         run: |
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v1.4.0.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v1.4.0.zip
+          zip -r ../VirtualCam-Manager-Magisk-v1.5.0.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v1.5.0.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v1.5.0.zip
 
       - name: Upload Magisk Module
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v1.4.0
-          path: VirtualCam-Manager-Magisk-v1.4.0.zip
+          name: VirtualCam-Manager-Magisk-v1.5.0
+          path: VirtualCam-Manager-Magisk-v1.5.0.zip
           if-no-files-found: error
