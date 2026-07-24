@@ -13,19 +13,26 @@ Only two components:
 
 No LSPosed. No Xposed. No extra frameworks.
 
-## Current Status (2026-07-23)
+## Current Status
 
 | Component              | Status                          |
 |------------------------|---------------------------------|
 | Magisk Module          | **v1.2.0 ready**                |
-| Controller APK source  | In progress (Compose + libsu)   |
+| Controller APK         | Source complete + GitHub Actions builds |
 | Zygisk native hooks    | Planned (for real frame injection) |
 
 > **Important**: The Magisk module + APK fully manage the classic paths and flags the original VCAM used. Actual camera frame replacement (Camera1 / Camera2 interception) still requires the native Zygisk component that is under development. Until then, the environment is 100% prepared for any future hook or for apps that respect the classic file-based control.
 
-## Download Magisk Module
+## Download
 
-- Latest: [VirtualCam-Manager-Magisk-v1.2.0.zip](https://github.com/smithluke874/Android-VirtualCam-Manager/releases) (or build from `magisk-module/`)
+### Magisk Module
+- Latest: `VirtualCam-Manager-Magisk-v1.2.0.zip` (see Releases or `magisk-module/`)
+
+### APK
+GitHub Actions builds the APK on every push to `main`.  
+Go to **Actions → Build APK → latest successful run → Artifacts** and download:
+- `VirtualCam-Manager-debug`
+- `VirtualCam-Manager-release`
 
 ## Classic paths preserved exactly
 
@@ -47,17 +54,17 @@ Private mode (when `private_dir.jpg` exists):
 - Rooted Android 8.0 – 16 (target latest)
 - **No LSPosed / EdXposed / Xposed**
 
-## How to use (once APK is ready)
+## How to use
 
 1. Flash the Magisk module and reboot
-2. Install the single VirtualCam Manager APK
+2. Install the VirtualCam Manager APK (from Actions artifacts)
 3. Grant root to the APK
-4. Use Media tab → place your `virtual.mp4`
+4. Use Media tab → prepare directory / place your `virtual.mp4`
 5. Use Settings tab → toggle the classic flags
 
-## Building
+## Building locally
 
-See [BUILD.md](BUILD.md) (coming next).
+See [BUILD.md](BUILD.md).
 
 ## Disclaimer
 
