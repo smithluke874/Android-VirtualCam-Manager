@@ -1,13 +1,24 @@
 #!/system/bin/sh
+# VirtualCam Manager — late_start service
+
 MODDIR=${0%/*}
-sleep 3
-mkdir -p /data/media/0/DCIM/Camera1
-chmod 775 /data/media/0/DCIM/Camera1
-chown media_rw:media_rw /data/media/0/DCIM/Camera1 2>/dev/null || true
-mkdir -p /sdcard/DCIM/Camera1 2>/dev/null || true
+
+# Wait for user data / storage
+sleep 8
+
 mkdir -p /data/adb/virtualcam
-chmod 755 /data/adb/virtualcam
-# Keep enabled flag if APK already set it; otherwise default on
-[ -f /data/adb/virtualcam/enabled ] || echo 1 > /data/adb/virtualcam/enabled
-date +%s > /data/adb/virtualcam/last_service 2>/dev/null || true
-restorecon -R /data/media/0/DCIM/Camera1 2>/dev/null || true
+mkdir -p /storage/emulated/0/DCIM/Camera1 2>/dev/null
+chmod 775 /storage/emulated/0/DCIM/Camera1 2>/dev/null
+
+# SELinux context for Camera1 (best effort)
+restorecon -RF /storage/emulated/0/DCIM/Camera1 2>/dev/null
+restorecon -RF /data/adb/virtualcam 2>/dev/null
+
+# Keep control files readable by Zygisk companion + APK (root)
+chmod 644 /data/adb/virtualcam/enabled 2>/dev/null
+chmod 644 /data/adb/virtualcam/hook_status 2>/dev/null
+chmod 644 /data/adb/virtualcam/last_hook_pkg 2>/dev/null
+
+# Marker so APK can detect module
+echo -n "1.7.0" > /data/adb/virtualcam/module_version
+chmod 644 /data/adb/virtualcam/module_version 2>/dev/null

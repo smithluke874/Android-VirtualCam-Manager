@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.5.0
-versionCode=150
+version=v1.7.0
+versionCode=170
 author=smithluke874
-description=Pure Magisk + companion APK (NO LSPosed). Paths/flags + Zygisk native with hook status feedback. Frame injection via LSPlant next.
+description=Pure Magisk + Zygisk VirtualCam (NO LSPosed). Gates apps, JNI Camera hooks, control plane for Manager APK.

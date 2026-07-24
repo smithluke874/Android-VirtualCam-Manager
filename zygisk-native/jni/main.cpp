@@ -1,17 +1,16 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.5.1
+ * VirtualCam Manager — Zygisk native module v1.7.0
  * Pure Magisk (NO LSPosed manager).
  *
- * Current:
- *  - Companion reads control plane
- *  - Gates app processes when enabled + video + !disable
- *  - Writes hook_status for APK feedback
- *  - VideoFrameProvider opens virtual.mp4
+ * v1.7.0:
+ *  - Companion control-plane gate (enabled + video + !disable)
+ *  - VideoFrameProvider validates virtual.mp4
+ *  - hookJniNativeMethods on android.hardware.Camera native methods
+ *  - Reports hooked / active / no_video / gate_off to APK
  *
- * Next (LSPlant):
- *  - Init LSPlant in postAppSpecialize
- *  - Hook Camera.setPreviewTexture / setPreviewCallback* / startPreview
- *  - MediaPlayer → surface + NV21 callback injection (see docs/ORIGINAL_HOOK_ALGORITHM.md)
+ * Still needed for full visual spoof on all apps:
+ *  - LSPlant ART hooks for Java setPreviewTexture / PreviewCallback
+ *  - MediaPlayer surface + NV21 overwrite (docs/ORIGINAL_HOOK_ALGORITHM.md)
  */
 
 #include <cstdlib>
@@ -21,6 +20,7 @@
 #include <sys/stat.h>
 #include <android/log.h>
 #include <string>
+#include <vector>
 
 #include "zygisk.hpp"
 
@@ -82,7 +82,7 @@ public:
             return false;
         }
         struct stat st{};
-        if (stat(path, &st) == 0) {
+        if (stat(path, &st) == 0 && st.st_size > 0) {
             size_ = st.st_size;
             LOGI("video ready path=%s size=%lld", path, (long long)size_);
             opened_ = true;
@@ -100,12 +100,102 @@ private:
 };
 
 static VideoFrameProvider g_video;
+static Api *g_api = nullptr;
+
+/* Original native method pointers (filled by hookJniNativeMethods) */
+static void (*orig_native_setup)(JNIEnv *, jobject, jobject) = nullptr;
+static void (*orig_native_startPreview)(JNIEnv *, jobject) = nullptr;
+static void (*orig_native_stopPreview)(JNIEnv *, jobject) = nullptr;
+static void (*orig_native_setPreviewDisplay)(JNIEnv *, jobject, jobject) = nullptr;
+static void (*orig_native_setPreviewCallback)(JNIEnv *, jobject, jobject) = nullptr;
+static void (*orig_native_takePicture)(JNIEnv *, jobject, jobject, jobject, jobject, jobject) = nullptr;
+
+static void hooked_native_setup(JNIEnv *env, jobject thiz, jobject weak) {
+    LOGI("hook: native_setup (Camera open path)");
+    if (orig_native_setup) orig_native_setup(env, thiz, weak);
+}
+
+static void hooked_native_startPreview(JNIEnv *env, jobject thiz) {
+    LOGI("hook: native_startPreview — video=%s", g_video.isOpen() ? g_video.path() : "none");
+    if (orig_native_startPreview) orig_native_startPreview(env, thiz);
+}
+
+static void hooked_native_stopPreview(JNIEnv *env, jobject thiz) {
+    LOGI("hook: native_stopPreview");
+    if (orig_native_stopPreview) orig_native_stopPreview(env, thiz);
+}
+
+static void hooked_native_setPreviewDisplay(JNIEnv *env, jobject thiz, jobject surface) {
+    LOGI("hook: native_setPreviewDisplay surface=%p", surface);
+    /* Full surface swap requires Java-level SurfaceTexture replacement (LSPlant). */
+    if (orig_native_setPreviewDisplay) orig_native_setPreviewDisplay(env, thiz, surface);
+}
+
+static void hooked_native_setPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
+    LOGI("hook: native_setPreviewCallback cb=%p", cb);
+    if (orig_native_setPreviewCallback) orig_native_setPreviewCallback(env, thiz, cb);
+}
+
+static void hooked_native_takePicture(JNIEnv *env, jobject thiz,
+                                      jobject sh, jobject raw, jobject post, jobject jpeg) {
+    LOGI("hook: native_takePicture");
+    if (orig_native_takePicture) orig_native_takePicture(env, thiz, sh, raw, post, jpeg);
+}
+
+static int install_jni_hooks(JNIEnv *env) {
+    if (!g_api || !env) return 0;
+
+    /*
+     * Zygisk can rewrite the JNINativeMethod table for classes that expose
+     * native methods. Method names/signatures vary by Android version; we
+     * try the common Camera1 set and count successes.
+     */
+    JNINativeMethod methods[] = {
+        {"native_setup",
+         "(Ljava/lang/Object;)V",
+         (void *) hooked_native_setup},
+        {"native_startPreview",
+         "()V",
+         (void *) hooked_native_startPreview},
+        {"native_stopPreview",
+         "()V",
+         (void *) hooked_native_stopPreview},
+        {"native_setPreviewDisplay",
+         "(Landroid/view/Surface;)V",
+         (void *) hooked_native_setPreviewDisplay},
+        {"setPreviewCallback",
+         "(Landroid/hardware/Camera$PreviewCallback;)V",
+         (void *) hooked_native_setPreviewCallback},
+        {"native_takePicture",
+         "(Landroid/hardware/Camera$ShutterCallback;"
+         "Landroid/hardware/Camera$PictureCallback;"
+         "Landroid/hardware/Camera$PictureCallback;"
+         "Landroid/hardware/Camera$PictureCallback;)V",
+         (void *) hooked_native_takePicture},
+    };
+
+    /* Save originals: hookJniNativeMethods replaces fnPtr with original */
+    g_api->hookJniNativeMethods(env, "android/hardware/Camera",
+                                methods, sizeof(methods) / sizeof(methods[0]));
+
+    int hooked = 0;
+    if (methods[0].fnPtr) { orig_native_setup = (decltype(orig_native_setup)) methods[0].fnPtr; hooked++; }
+    if (methods[1].fnPtr) { orig_native_startPreview = (decltype(orig_native_startPreview)) methods[1].fnPtr; hooked++; }
+    if (methods[2].fnPtr) { orig_native_stopPreview = (decltype(orig_native_stopPreview)) methods[2].fnPtr; hooked++; }
+    if (methods[3].fnPtr) { orig_native_setPreviewDisplay = (decltype(orig_native_setPreviewDisplay)) methods[3].fnPtr; hooked++; }
+    if (methods[4].fnPtr) { orig_native_setPreviewCallback = (decltype(orig_native_setPreviewCallback)) methods[4].fnPtr; hooked++; }
+    if (methods[5].fnPtr) { orig_native_takePicture = (decltype(orig_native_takePicture)) methods[5].fnPtr; hooked++; }
+
+    LOGI("JNI Camera hooks installed: %d / %zu", hooked, sizeof(methods) / sizeof(methods[0]));
+    return hooked;
+}
 
 class VirtualCamModule : public zygisk::ModuleBase {
 public:
     void onLoad(Api *api, JNIEnv *env) override {
         this->api = api;
         this->env = env;
+        g_api = api;
     }
 
     void preAppSpecialize(AppSpecializeArgs *args) override {
@@ -154,24 +244,16 @@ public:
             return;
         }
 
-        /*
-         * Frame injection requires ART Java hooks (LSPlant).
-         * Until linked, we still:
-         *  - stay loaded in the process
-         *  - report status=active so APK proves the gate works
-         *  - log the exact original targets we will hook
-         *
-         * Targets (from original HookMain):
-         *  Camera.setPreviewTexture(SurfaceTexture)
-         *  Camera.setPreviewDisplay(SurfaceHolder)
-         *  Camera.startPreview()
-         *  Camera.setPreviewCallback / WithBuffer / OneShot
-         *  Camera.takePicture(...)
-         *  CameraManager.openCamera(...)
-         *  CaptureRequest.Builder addTarget/removeTarget/build
-         */
-        install_hooks();
-        report_status(state.process, "active");
+        int n = install_jni_hooks(env);
+        if (n > 0) {
+            report_status(state.process, "hooked");
+            LOGI("status=hooked count=%d pkg=%s video=%s",
+                 n, state.process, g_video.path());
+        } else {
+            /* Gate worked, video present, but no matching JNI natives on this ROM */
+            report_status(state.process, "active");
+            LOGI("status=active (no JNI natives matched — need LSPlant for Java hooks)");
+        }
     }
 
     void preServerSpecialize(ServerSpecializeArgs *args) override {
@@ -182,24 +264,6 @@ private:
     Api *api = nullptr;
     JNIEnv *env = nullptr;
     VcamState state{};
-
-    void install_hooks() {
-        LOGI("install_hooks: video=%s size=%lld pkg=%s",
-             g_video.path(), (long long)g_video.size(), state.process);
-        LOGI("LSPlant pending: will hook setPreviewTexture + PreviewCallback + Camera2");
-
-        // Verify JNI env can resolve Camera class (sanity for later hooks)
-        if (env) {
-            jclass camera = env->FindClass("android/hardware/Camera");
-            if (camera) {
-                LOGI("JNI: android.hardware.Camera resolved");
-                env->DeleteLocalRef(camera);
-            } else {
-                env->ExceptionClear();
-                LOGE("JNI: Camera class not found");
-            }
-        }
-    }
 };
 
 static void companion_handler(int fd) {

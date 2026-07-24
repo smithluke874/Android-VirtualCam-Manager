@@ -12,8 +12,8 @@ android {
         applicationId = "com.virtualcam.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 161
-        versionName = "1.6.1"
+        versionCode = 170
+        versionName = "1.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
