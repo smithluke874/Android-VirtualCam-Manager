@@ -53,10 +53,10 @@ fun MediaHubScreen() {
             )
 
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.VideoFile, contentDescription = null, tint = Primary)
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text("virtual.mp4", style = MaterialTheme.typography.titleMedium)
                             Text(
@@ -67,21 +67,21 @@ fun MediaHubScreen() {
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Place a video named exactly virtual.mp4 into the Camera1 folder. Resolution should match the target app's preview.",
+                        text = "Place a video named exactly virtual.mp4 into the Camera1 folder.\nPath: /storage/emulated/0/DCIM/Camera1/virtual.mp4\nResolution should match the target app's preview when possible.",
                         style = MaterialTheme.typography.bodySmall
                     )
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = {
                                 scope.launch {
                                     repo.ensureGlobalCamera1()
-                                    message = "Camera1 directory ready. Copy virtual.mp4 there via a file manager."
+                                    message = "Camera1 directory ready. Copy virtual.mp4 there via a root file manager (e.g. MiXplorer / Solid Explorer)."
                                     refresh()
                                 }
                             }
@@ -107,7 +107,7 @@ fun MediaHubScreen() {
                 text = "• Front camera often needs horizontal flip + 90° rotation\n" +
                         "• Create no-silent.jpg if you want audio from the video\n" +
                         "• Create private_dir.jpg to force per-app private path\n" +
-                        "• Future version will include on-device FFmpeg transcoding",
+                        "• Future version will include on-device FFmpeg transcoding + file picker",
                 style = MaterialTheme.typography.bodyMedium
             )
         }

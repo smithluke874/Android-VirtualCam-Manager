@@ -53,7 +53,10 @@ fun SettingsScreen() {
         }
     ) { padding ->
         if (isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = Primary)
             }
         } else {
@@ -106,7 +109,7 @@ fun SettingsScreen() {
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_FORCE_SHOW, forceShow) { forceShow = it } }
                 )
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Text("About", style = MaterialTheme.typography.titleMedium)
                 Text(

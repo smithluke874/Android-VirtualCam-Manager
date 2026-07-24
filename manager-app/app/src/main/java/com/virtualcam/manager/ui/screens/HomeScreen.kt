@@ -69,24 +69,35 @@ fun HomeScreen() {
             )
 
             if (isLoading) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Primary)
                 }
             } else {
                 status?.let { s ->
                     StatusCard("Root Access", s.rootAvailable)
                     StatusCard("Magisk", s.magiskPresent)
+                    StatusCard(
+                        title = if (s.moduleVersion != null) "Module (${s.moduleVersion})" else "VirtualCam Module",
+                        ok = s.moduleInstalled
+                    )
                     StatusCard("Camera1 Directory", s.camera1Ready)
                     StatusCard("Module Control Dir", s.moduleControlDir)
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     if (s.allPassed) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Success.copy(alpha = 0.15f))
                         ) {
                             Text(
-                                text = "Environment ready. Use the Media and Settings tabs to place virtual.mp4 and control flags.",
+                                text = if (s.moduleInstalled) {
+                                    "Environment ready. Module detected. Use Media + Settings tabs to place virtual.mp4 and control flags."
+                                } else {
+                                    "Root + Magisk OK, but Magisk module not detected. Flash VirtualCam-Manager-Magisk zip, then reboot."
+                                },
                                 modifier = Modifier.padding(16.dp),
                                 style = MaterialTheme.typography.bodyLarge
                             )
@@ -95,13 +106,13 @@ fun HomeScreen() {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.15f))
                         ) {
-                            Column(Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
                                     text = "Missing requirements",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    text = "This solution needs only Magisk + root. Flash the Magisk module first, then grant this APK root access.",
+                                    text = "This solution needs only Magisk + root.\n1. Flash the Magisk module\n2. Reboot\n3. Grant this APK root access",
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
@@ -111,14 +122,15 @@ fun HomeScreen() {
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text("How it works", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = "• Magisk module prepares /DCIM/Camera1 exactly as the original VCAM exploit expected\n" +
                         "• This single APK is the only control surface\n" +
                         "• Place virtual.mp4 and toggle the classic flag files from Settings\n" +
-                        "• No LSPosed / Xposed required",
+                        "• No LSPosed / Xposed required\n" +
+                        "• Zygisk native frame injection is the next major step",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
