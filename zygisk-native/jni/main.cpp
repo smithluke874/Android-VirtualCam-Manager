@@ -1,16 +1,25 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.7.0
+ * VirtualCam Manager — Zygisk native module v1.8.0
  * Pure Magisk (NO LSPosed manager).
  *
- * v1.7.0:
+ * v1.8.0:
  *  - Companion control-plane gate (enabled + video + !disable)
  *  - VideoFrameProvider validates virtual.mp4
  *  - hookJniNativeMethods on android.hardware.Camera native methods
- *  - Reports hooked / active / no_video / gate_off to APK
+ *  - Reports hooked / active / no_video / gate_off to APK via hook_status
+ *  - Scaffolding notes for LSPlant ART Java hooks (next milestone)
  *
  * Still needed for full visual spoof on all apps:
  *  - LSPlant ART hooks for Java setPreviewTexture / PreviewCallback
  *  - MediaPlayer surface + NV21 overwrite (docs/ORIGINAL_HOOK_ALGORITHM.md)
+ *
+ * LSPlant plan (pure Magisk, no LSPosed manager):
+ *  1. Add lsplant-standalone headers + static library (or build in CI)
+ *  2. Provide InitInfo { inline_hooker, inline_unhooker, art_symbol_resolver }
+ *  3. Call lsplant::Init(env, info) in postAppSpecialize after gate opens
+ *  4. Hook Java methods via reflection Method objects + callback
+ *  5. Keep current JNI hooks as secondary / logging layer
+ *  6. Write status "injecting" once frames are actually replaced
  */
 
 #include <cstdlib>
@@ -230,6 +239,10 @@ public:
              state.should_hook ? 1 : 0);
 
         if (!state.should_hook) {
+            /* Report gate_off so APK can show accurate state */
+            if (!state.global_enabled || state.disable_flag) {
+                report_status(state.process, "gate_off");
+            }
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
         }
     }
@@ -243,6 +256,11 @@ public:
             report_status(state.process, "no_video");
             return;
         }
+
+        /*
+         * Future: LSPlant Init + Java method hooks go here.
+         * After successful LSPlant frame injection, report_status(..., "injecting");
+         */
 
         int n = install_jni_hooks(env);
         if (n > 0) {
