@@ -1,15 +1,17 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.5.0
- * Pure Magisk (NO LSPosed).
+ * VirtualCam Manager — Zygisk native module v1.5.1
+ * Pure Magisk (NO LSPosed manager).
  *
- * Control plane (APK writes / this module reads):
- *   /data/adb/virtualcam/enabled
- *   /storage/emulated/0/DCIM/Camera1/virtual.mp4
- *   /storage/emulated/0/DCIM/Camera1/disable.jpg
+ * Current:
+ *  - Companion reads control plane
+ *  - Gates app processes when enabled + video + !disable
+ *  - Writes hook_status for APK feedback
+ *  - VideoFrameProvider opens virtual.mp4
  *
- * Feedback (this module writes / APK reads):
- *   /data/adb/virtualcam/hook_status
- *   /data/adb/virtualcam/last_hook_pkg
+ * Next (LSPlant):
+ *  - Init LSPlant in postAppSpecialize
+ *  - Hook Camera.setPreviewTexture / setPreviewCallback* / startPreview
+ *  - MediaPlayer → surface + NV21 callback injection (see docs/ORIGINAL_HOOK_ALGORITHM.md)
  */
 
 #include <cstdlib>
@@ -19,7 +21,6 @@
 #include <sys/stat.h>
 #include <android/log.h>
 #include <string>
-#include <chrono>
 
 #include "zygisk.hpp"
 
@@ -72,11 +73,6 @@ static void report_status(const char *pkg, const char *status) {
     write_text(kLastPkg, pkg);
 }
 
-/*
- * VideoFrameProvider — skeleton for decoding virtual.mp4 frames.
- * Next iteration: MediaCodec / libmediandk to produce NV21/YUV420
- * buffers sized to the active Camera preview request.
- */
 class VideoFrameProvider {
 public:
     bool open(const char *path) {
@@ -94,16 +90,9 @@ public:
         }
         return false;
     }
-
     bool isOpen() const { return opened_; }
     const char *path() const { return path_.c_str(); }
     off_t size() const { return size_; }
-
-    // Placeholder: returns false until MediaCodec path is wired
-    bool nextNv21(uint8_t * /*out*/, size_t /*capacity*/, int /*w*/, int /*h*/) {
-        return false;
-    }
-
 private:
     std::string path_;
     off_t size_ = 0;
@@ -165,6 +154,22 @@ public:
             return;
         }
 
+        /*
+         * Frame injection requires ART Java hooks (LSPlant).
+         * Until linked, we still:
+         *  - stay loaded in the process
+         *  - report status=active so APK proves the gate works
+         *  - log the exact original targets we will hook
+         *
+         * Targets (from original HookMain):
+         *  Camera.setPreviewTexture(SurfaceTexture)
+         *  Camera.setPreviewDisplay(SurfaceHolder)
+         *  Camera.startPreview()
+         *  Camera.setPreviewCallback / WithBuffer / OneShot
+         *  Camera.takePicture(...)
+         *  CameraManager.openCamera(...)
+         *  CaptureRequest.Builder addTarget/removeTarget/build
+         */
         install_hooks();
         report_status(state.process, "active");
     }
@@ -179,20 +184,21 @@ private:
     VcamState state{};
 
     void install_hooks() {
-        /*
-         * Frame injection plan (pure Zygisk, no LSPosed):
-         *
-         * 1. Short term: PLT / JNI native hooks on Camera path
-         * 2. Medium: integrate LSPlant (ART method hook) for
-         *    Camera.setPreviewCallback / Camera2 ImageReader callbacks
-         *    matching original android_virtual_cam HookMain targets
-         * 3. Feed NV21 frames from VideoFrameProvider into hooked callbacks
-         *
-         * Until LSPlant is linked, we still gate processes correctly and
-         * report status so the APK can show "Zygisk saw this app".
-         */
-        LOGI("install_hooks: video=%s size=%lld pkg=%s — frame path pending LSPlant",
+        LOGI("install_hooks: video=%s size=%lld pkg=%s",
              g_video.path(), (long long)g_video.size(), state.process);
+        LOGI("LSPlant pending: will hook setPreviewTexture + PreviewCallback + Camera2");
+
+        // Verify JNI env can resolve Camera class (sanity for later hooks)
+        if (env) {
+            jclass camera = env->FindClass("android/hardware/Camera");
+            if (camera) {
+                LOGI("JNI: android.hardware.Camera resolved");
+                env->DeleteLocalRef(camera);
+            } else {
+                env->ExceptionClear();
+                LOGE("JNI: Camera class not found");
+            }
+        }
     }
 };
 
