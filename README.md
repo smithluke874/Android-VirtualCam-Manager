@@ -1,74 +1,57 @@
 # Android VirtualCam Manager
 
 **Pure Magisk module + single controller APK**  
-**NO LSPosed / NO Xposed required.**
+**NO LSPosed / NO Xposed.**
 
-Classic android_virtual_cam (VCAM) paths and flags, controlled by one Magisk module and one APK. Designed for latest rooted Android.
+Automate classic android_virtual_cam paths and flags entirely from the APK. Zygisk native module reads the same control plane for process-level activation (frame injection hooks in progress).
 
-## Components (only these two)
+## Only two components
 
-| Component | Role |
-|-----------|------|
-| **Magisk Module** | Creates `/DCIM/Camera1` at boot, owns Zygisk skeleton for future native frame injection |
-| **Manager APK** | Root UI to place `virtual.mp4`, toggle flag files, show status |
+1. **Magisk Module** — boot paths, Zygisk native lib, control dir  
+2. **Manager APK** — one-tap enable/disable, import video, flags
 
-No LSPosed. No Xposed. No second framework.
-
-## Status
+## Status (v1.4.0)
 
 | Feature | Status |
 |---------|--------|
-| Magisk module (paths + flags env) | **v1.3.0 ready** |
-| Manager APK (Compose + libsu) | **Builds via GitHub Actions** |
-| Classic path/flag control | **Working** |
-| Zygisk native Camera hooks | Skeleton ready — implementation next |
-
-> **Honest note:** Original VCAM replaced camera frames by **Xposed-hooking** Camera1/Camera2 APIs, then reading `virtual.mp4` from Camera1. Our Magisk module + APK fully own that control plane. Real frame injection without LSPosed requires the Zygisk native libraries (in progress under `magisk-module/zygisk/`).
+| Magisk paths + flags env | Working |
+| APK one-tap auto-setup / enable | Working |
+| Import virtual.mp4 from Downloads | Working |
+| Flag toggles (disable, private_dir, …) | Working |
+| Zygisk companion + process gate | Source ready (CI builds .so) |
+| Camera1/Camera2 frame injection | Stub / next iteration |
 
 ## Download
 
-### Magisk Module
-- Flash `VirtualCam-Manager-Magisk-v1.3.0.zip` (build from `magisk-module/` or project artifacts)
+GitHub **Actions** → latest green run → Artifacts:
 
-### APK
-- **Actions → Build APK → latest green run → Artifacts**
-  - `VirtualCam-Manager-debug`
-  - `VirtualCam-Manager-release`
+- `VirtualCam-Manager-debug` / `release`
+- `VirtualCam-Manager-Magisk-v1.4.0`
 
-## Classic paths (exact)
+## Install (fully automated after flash)
+
+1. Magisk → enable **Zygisk** → flash module zip → reboot  
+2. Install APK → grant root  
+3. Home → toggle **ON** (or **Run full auto-setup**)  
+4. Media → put `virtual.mp4` in Download → **Import from Downloads**  
+5. Optional flags in Settings  
+
+## Control plane (APK ↔ Zygisk)
 
 ```
+/data/adb/virtualcam/enabled          # 1=on 0=off
+/data/adb/virtualcam/config
 /storage/emulated/0/DCIM/Camera1/virtual.mp4
 /storage/emulated/0/DCIM/Camera1/disable.jpg
-/storage/emulated/0/DCIM/Camera1/private_dir.jpg
-/storage/emulated/0/DCIM/Camera1/no-silent.jpg
-/storage/emulated/0/DCIM/Camera1/no_toast.jpg
-/storage/emulated/0/DCIM/Camera1/force_show.jpg
+...
 ```
-
-Private mode (when `private_dir.jpg` exists):
-`/storage/emulated/0/Android/data/<package>/files/Camera1/`
-
-## Install & test
-
-1. Enable **Zygisk** in Magisk settings (needed later for native hooks; harmless now)
-2. Flash Magisk module → reboot
-3. Install Manager APK → grant root
-4. Home tab: confirm Root / Magisk / Module / Camera1 are green
-5. Put a video named `virtual.mp4` in **Download**
-6. Media tab → **Import from Downloads**
-7. Settings tab → toggle flags and verify files under Camera1
 
 ## Requirements
 
-- Magisk 27+ (Zygisk available)
-- Rooted Android 8 – 16
-- **No LSPosed / EdXposed / Xposed**
-
-## Building
-
-See [BUILD.md](BUILD.md). APK builds automatically on every push to `main`.
+- Magisk 27+ with Zygisk  
+- Rooted Android 8–16  
+- **No LSPosed**
 
 ## Disclaimer
 
-For legitimate privacy research, testing, and development only. Do not use for illegal purposes.
+Legitimate research / testing only.

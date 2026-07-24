@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.3.0
-versionCode=130
+version=v1.4.0
+versionCode=140
 author=smithluke874
-description=Pure Magisk module + companion APK (NO LSPosed). Classic VCAM paths + flags. Zygisk skeleton ready for native Camera1/Camera2 frame injection on latest Android.
+description=Pure Magisk + companion APK (NO LSPosed). Classic VCAM paths/flags + Zygisk native control plane. Frame injection hooks in progress.

@@ -1,0 +1,92 @@
+package com.virtualcam.manager.data
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * One-shot automation: prepare the entire pure-Magisk VirtualCam environment
+ * from the APK with root. No manual shell steps required.
+ */
+class AutoSetup(
+    private val fs: FileSystemRepository = FileSystemRepository()
+) {
+
+    data class Result(
+        val rootOk: Boolean,
+        val camera1Ok: Boolean,
+        val controlDirOk: Boolean,
+        val moduleDetected: Boolean,
+        val enabledWritten: Boolean,
+        val message: String
+    )
+
+    suspend fun runFullSetup(enable: Boolean = true): Result = withContext(Dispatchers.IO) {
+        val root = RootShell.isRootAvailable()
+        if (!root) {
+            return@withContext Result(
+                rootOk = false,
+                camera1Ok = false,
+                controlDirOk = false,
+                moduleDetected = false,
+                enabledWritten = false,
+                message = "Root not granted. Open Magisk and allow this app."
+            )
+        }
+
+        val camera1 = fs.ensureGlobalCamera1()
+
+        val control = RootShell.exec(
+            "mkdir -p /data/adb/virtualcam",
+            "chmod 755 /data/adb/virtualcam"
+        ).isSuccess
+
+        val module = RootShell.exec(
+            "[ -d /data/adb/modules/virtualcam_manager ] && echo 1 || echo 0"
+        ).out.firstOrNull()?.trim() == "1" ||
+            RootShell.exec(
+                "[ -f /data/adb/virtualcam/module_installed ] && echo 1 || echo 0"
+            ).out.firstOrNull()?.trim() == "1"
+
+        // Write config Zygisk + service scripts read
+        val enabledCmd = if (enable) {
+            listOf(
+                "echo 1 > /data/adb/virtualcam/enabled",
+                "echo 'mode=global' > /data/adb/virtualcam/config",
+                "echo 'path=/storage/emulated/0/DCIM/Camera1/virtual.mp4' >> /data/adb/virtualcam/config",
+                "rm -f /storage/emulated/0/DCIM/Camera1/disable.jpg"
+            )
+        } else {
+            listOf(
+                "echo 0 > /data/adb/virtualcam/enabled",
+                "touch /storage/emulated/0/DCIM/Camera1/disable.jpg",
+                "chmod 644 /storage/emulated/0/DCIM/Camera1/disable.jpg"
+            )
+        }
+        val enabledWritten = RootShell.exec(*enabledCmd.toTypedArray()).isSuccess
+
+        // Ensure service marker for APK feedback loop
+        RootShell.exec("date +%s > /data/adb/virtualcam/last_setup")
+
+        val msg = buildString {
+            append(if (enable) "VirtualCam ENABLED. " else "VirtualCam DISABLED. ")
+            if (!module) append("Flash Magisk module + reboot for full path persistence. ")
+            append("Place virtual.mp4 via Media tab (or Import from Downloads).")
+        }
+
+        Result(
+            rootOk = true,
+            camera1Ok = camera1,
+            controlDirOk = control,
+            moduleDetected = module,
+            enabledWritten = enabledWritten,
+            message = msg
+        )
+    }
+
+    suspend fun isEnabled(): Boolean = withContext(Dispatchers.IO) {
+        val r = RootShell.exec(
+            "[ -f /data/adb/virtualcam/enabled ] && cat /data/adb/virtualcam/enabled || echo 0"
+        )
+        r.out.firstOrNull()?.trim() == "1"
+    }
+}

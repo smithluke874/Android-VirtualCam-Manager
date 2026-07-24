@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.virtualcam.manager.data.AutoSetup
 import com.virtualcam.manager.data.PrerequisiteChecker
 import com.virtualcam.manager.data.PrerequisiteStatus
 import com.virtualcam.manager.ui.theme.Primary
@@ -23,19 +24,33 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen() {
     val checker = remember { PrerequisiteChecker() }
+    val autoSetup = remember { AutoSetup() }
     var status by remember { mutableStateOf<PrerequisiteStatus?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var enabled by remember { mutableStateOf(false) }
+    var setupMessage by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun refresh() {
         scope.launch {
             isLoading = true
             status = checker.check()
+            enabled = autoSetup.isEnabled()
             isLoading = false
         }
     }
 
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(Unit) {
+        // Auto-prepare paths on every launch when root is available
+        status = checker.check()
+        if (status?.rootAvailable == true) {
+            autoSetup.runFullSetup(enable = autoSetup.isEnabled())
+        }
+        enabled = autoSetup.isEnabled()
+        status = checker.check()
+        isLoading = false
+    }
 
     Scaffold(
         topBar = {
@@ -57,22 +72,81 @@ fun HomeScreen() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text("One-tap control", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "System Status",
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Text(
-                text = "Pure Magisk + single APK mode (no LSPosed)",
+                text = "Pure Magisk + single APK — everything automated from here",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            // Primary enable / disable
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (enabled) Success.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (enabled) "VirtualCam is ON" else "VirtualCam is OFF",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                if (enabled) "disable.jpg removed · enabled=1 written"
+                                else "Tap Enable to prepare paths + activate",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = enabled,
+                            enabled = !busy && status?.rootAvailable == true,
+                            onCheckedChange = { want ->
+                                scope.launch {
+                                    busy = true
+                                    val r = autoSetup.runFullSetup(enable = want)
+                                    setupMessage = r.message
+                                    enabled = autoSetup.isEnabled()
+                                    status = checker.check()
+                                    busy = false
+                                }
+                            }
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                val r = autoSetup.runFullSetup(enable = true)
+                                setupMessage = r.message
+                                enabled = true
+                                status = checker.check()
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && status?.rootAvailable == true,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (busy) "Working…" else "Run full auto-setup")
+                    }
+                }
+            }
+
+            setupMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = Success)
+            }
+
+            Text("System status", style = MaterialTheme.typography.titleMedium)
+
             if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Primary)
                 }
             } else {
@@ -84,53 +158,30 @@ fun HomeScreen() {
                         ok = s.moduleInstalled
                     )
                     StatusCard("Camera1 Directory", s.camera1Ready)
-                    StatusCard("Module Control Dir", s.moduleControlDir)
+                    StatusCard("Control Dir", s.moduleControlDir)
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (s.allPassed) {
+                    if (!s.moduleInstalled) {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Success.copy(alpha = 0.15f))
+                            colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.12f))
                         ) {
                             Text(
-                                text = if (s.moduleInstalled) {
-                                    "Environment ready. Module detected. Use Media + Settings tabs to place virtual.mp4 and control flags."
-                                } else {
-                                    "Root + Magisk OK, but Magisk module not detected. Flash VirtualCam-Manager-Magisk zip, then reboot."
-                                },
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyLarge
+                                text = "Flash VirtualCam-Manager-Magisk zip in Magisk, then reboot. APK still manages paths/flags without it.",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall
                             )
-                        }
-                    } else {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.15f))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Missing requirements",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    text = "This solution needs only Magisk + root.\n1. Flash the Magisk module\n2. Reboot\n3. Grant this APK root access",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
-                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("How it works", style = MaterialTheme.typography.titleMedium)
+            Text("Flow", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "• Magisk module prepares /DCIM/Camera1 exactly as the original VCAM exploit expected\n" +
-                        "• This single APK is the only control surface\n" +
-                        "• Place virtual.mp4 and toggle the classic flag files from Settings\n" +
-                        "• No LSPosed / Xposed required\n" +
-                        "• Zygisk native frame injection is the next major step",
+                text = "1. Flash Magisk module once + reboot\n" +
+                        "2. Open this APK → grant root\n" +
+                        "3. Toggle ON (or Run full auto-setup)\n" +
+                        "4. Media tab → Import virtual.mp4\n" +
+                        "5. Settings → optional flags\n" +
+                        "Zygisk native hooks (frame injection) load with the module when built.",
                 style = MaterialTheme.typography.bodyMedium
             )
         }

@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK + Magisk Module
 
 on:
   push:
@@ -6,13 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     name: Assemble Debug & Release APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -57,4 +55,51 @@ jobs:
         with:
           name: VirtualCam-Manager-release
           path: manager-app/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  build-magisk:
+    name: Package Magisk Module (+ Zygisk if NDK available)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26b
+          add-to-path: true
+        continue-on-error: true
+
+      - name: Fetch zygisk.hpp
+        run: |
+          mkdir -p zygisk-native/jni
+          curl -fsSL -o zygisk-native/jni/zygisk.hpp \
+            https://raw.githubusercontent.com/topjohnwu/zygisk-module-sample/master/module/jni/zygisk.hpp
+
+      - name: Build Zygisk native (optional)
+        if: steps.setup-ndk.outcome == 'success'
+        working-directory: zygisk-native
+        run: |
+          export NDK=${{ steps.setup-ndk.outputs.ndk-path }}
+          $NDK/ndk-build -j$(nproc) || echo "ndk-build failed — packaging module without .so"
+          mkdir -p ../magisk-module/zygisk
+          if [ -f libs/arm64-v8a/libvirtualcam.so ]; then
+            cp libs/arm64-v8a/libvirtualcam.so   ../magisk-module/zygisk/arm64-v8a.so
+            cp libs/armeabi-v7a/libvirtualcam.so ../magisk-module/zygisk/armeabi-v7a.so 2>/dev/null || true
+            cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so 2>/dev/null || true
+            echo "Zygisk .so packaged"
+          fi
+
+      - name: Package Magisk zip
+        run: |
+          cd magisk-module
+          zip -r ../VirtualCam-Manager-Magisk-v1.4.0.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v1.4.0.zip
+
+      - name: Upload Magisk Module
+        uses: actions/upload-artifact@v4
+        with:
+          name: VirtualCam-Manager-Magisk-v1.4.0
+          path: VirtualCam-Manager-Magisk-v1.4.0.zip
           if-no-files-found: error
