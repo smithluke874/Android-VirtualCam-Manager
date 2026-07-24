@@ -42,7 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Modifier as ComposeModifier
+import androidx.compose.ui.\u004dodifier as ComposeModifier
 import com.virtualcam.manager.data.FileSystemRepository
 import com.virtualcam.manager.data.MediaImportHelper
 import com.virtualcam.manager.ui.theme.Danger
@@ -87,186 +87,77 @@ fun MediaHubScreen() {
         }
     }
 
-    val pickVideo = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> onPicked(uri) }
-
-    val pickImage = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> onPicked(uri) }
-
-    val pickAny = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri -> onPicked(uri) }
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { onPicked(it) }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { onPicked(it) }
+    val pickAny = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { onPicked(it) }
 
     LaunchedEffect(Unit) { refresh() }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Media Hub") })
-        }
-    ) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Media Hub") }) }) { padding ->
         Column(
-            modifier = ComposeModifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = ComposeModifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Upload spoof media", style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = "Pick a video or image. The app installs it as virtual.mp4 and enables VirtualCam.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             Card(modifier = ComposeModifier.fillMaxWidth()) {
-                Column(
-                    modifier = ComposeModifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Column(modifier = ComposeModifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (hasVideo) Icons.Default.VideoFile else Icons.Default.Upload,
+                            if (hasVideo) Icons.Default.VideoFile else Icons.Default.Upload,
                             contentDescription = null,
                             tint = if (hasVideo) Success else Primary
                         )
                         Spacer(modifier = ComposeModifier.width(12.dp))
                         Column {
                             Text("virtual.mp4", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                if (hasVideo) "Ready in /DCIM/Camera1/" else "Not installed yet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (hasVideo) Success else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(if (hasVideo) "Ready" else "Not installed", color = if (hasVideo) Success else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-
                     if (importing || isLoading) {
-                        Row(
-                            modifier = ComposeModifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = ComposeModifier.height(36.dp).width(36.dp),
-                                color = Primary
-                            )
-                        }
+                        CircularProgressIndicator(modifier = ComposeModifier.height(36.dp).width(36.dp), color = Primary)
                     }
-
                     Button(
-                        onClick = {
-                            pickVideo.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.VideoOnly
-                                )
-                            )
-                        },
+                        onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
                         enabled = !importing,
                         modifier = ComposeModifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.VideoFile, contentDescription = null)
+                        Icon(Icons.Default.VideoFile, null)
                         Spacer(modifier = ComposeModifier.width(8.dp))
                         Text("Pick video")
                     }
-
                     Button(
-                        onClick = {
-                            pickImage.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly
-                                )
-                            )
-                        },
+                        onClick = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         enabled = !importing,
                         modifier = ComposeModifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Image, contentDescription = null)
+                        Icon(Icons.Default.Image, null)
                         Spacer(modifier = ComposeModifier.width(8.dp))
                         Text("Pick image (→ looping MP4)")
                     }
-
-                    OutlinedButton(
-                        onClick = { pickAny.launch("*/*") },
-                        enabled = !importing,
-                        modifier = ComposeModifier.fillMaxWidth()
-                    ) {
-                        Text("Pick any file (fallback)")
+                    OutlinedButton(onClick = { pickAny.launch("*/*") }, enabled = !importing, modifier = ComposeModifier.fillMaxWidth()) {
+                        Text("Pick any file")
                     }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    val src = repo.importVirtualFromDownloads()
-                                    if (src != null) {
-                                        messageOk = true
-                                        message = "Imported from Downloads:\n$src"
-                                    } else {
-                                        messageOk = false
-                                        message = "No virtual.mp4 found in Download/DCIM/Movies"
-                                    }
-                                    refresh()
-                                }
-                            },
-                            enabled = !importing,
-                            modifier = ComposeModifier.weight(1f)
-                        ) {
-                            Text("From Downloads")
-                        }
-                        OutlinedButton(
-                            onClick = { refresh() },
-                            enabled = !importing,
-                            modifier = ComposeModifier.weight(1f)
-                        ) {
-                            Text("Refresh")
-                        }
-                    }
-
                     if (hasVideo) {
                         TextButton(
                             onClick = {
                                 scope.launch {
                                     repo.removeVirtualVideo()
-                                    message = "virtual.mp4 removed"
+                                    message = "removed"
                                     messageOk = true
                                     refresh()
                                 }
                             },
                             colors = ButtonDefaults.textButtonColors(contentColor = Danger)
-                        ) {
-                            Text("Remove virtual.mp4")
-                        }
+                        ) { Text("Remove virtual.mp4") }
                     }
                 }
             }
-
-            message?.let { msg ->
-                Card(
-                    modifier = ComposeModifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (messageOk) Success.copy(alpha = 0.15f)
-                        else Danger.copy(alpha = 0.12f)
-                    )
-                ) {
-                    Text(
-                        text = msg,
-                        modifier = ComposeModifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+            message?.let {
+                Text(it, color = if (messageOk) Success else Danger)
             }
-
             if (listing.isNotEmpty()) {
-                Text("Camera1 contents", style = MaterialTheme.typography.titleMedium)
-                Card(modifier = ComposeModifier.fillMaxWidth()) {
-                    Column(modifier = ComposeModifier.padding(12.dp)) {
-                        listing.forEach { line ->
-                            Text(line, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
+                Text("Camera1 contents")
+                listing.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
     }
