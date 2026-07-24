@@ -9,7 +9,12 @@ data class PrerequisiteStatus(
     val moduleInstalled: Boolean = false,
     val camera1Ready: Boolean = false,
     val moduleControlDir: Boolean = false,
-    val moduleVersion: String? = null
+    val moduleVersion: String? = null,
+    val zygiskLibPresent: Boolean = false,
+    val hookStatus: String? = null,
+    val lastHookPkg: String? = null,
+    val vcamEnabled: Boolean = false,
+    val hasVirtualVideo: Boolean = false
 ) {
     val allPassed: Boolean
         get() = rootAvailable && magiskPresent && camera1Ready
@@ -26,7 +31,6 @@ class PrerequisiteChecker(
                 RootShell.exec("pm path com.topjohnwu.magisk").isSuccess ||
                 RootShell.exec("which magisk").isSuccess
 
-        // Detect our module specifically
         val modulePathCheck = RootShell.exec(
             "[ -d /data/adb/modules/virtualcam_manager ] && echo 1 || echo 0"
         ).out.firstOrNull()?.trim() == "1"
@@ -38,9 +42,27 @@ class PrerequisiteChecker(
         val moduleInstalled = modulePathCheck || markerCheck
 
         val version = RootShell.exec(
-            "cat /data/adb/virtualcam/version 2>/dev/null || cat /data/adb/modules/virtualcam_manager/module.prop 2>/dev/null | grep version= | head -1"
-        ).out.firstOrNull()?.trim()?.removePrefix("version=")
+            "cat /data/adb/virtualcam/version 2>/dev/null"
+        ).out.firstOrNull()?.trim()
 
+        val zygiskLib = RootShell.exec(
+            "[ -f /data/adb/modules/virtualcam_manager/zygisk/arm64-v8a.so ] && echo 1 || " +
+                    "[ -f /data/adb/modules/virtualcam_manager/zygisk/armeabi-v7a.so ] && echo 1 || echo 0"
+        ).out.firstOrNull()?.trim() == "1"
+
+        val hookStatus = RootShell.exec(
+            "cat /data/adb/virtualcam/hook_status 2>/dev/null"
+        ).out.firstOrNull()?.trim()
+
+        val lastPkg = RootShell.exec(
+            "cat /data/adb/virtualcam/last_hook_pkg 2>/dev/null"
+        ).out.firstOrNull()?.trim()
+
+        val enabled = RootShell.exec(
+            "[ -f /data/adb/virtualcam/enabled ] && cat /data/adb/virtualcam/enabled || echo 0"
+        ).out.firstOrNull()?.trim() == "1"
+
+        val hasVideo = fileSystem.hasVirtualVideo()
         val camera1 = fileSystem.ensureGlobalCamera1()
         val control = RootShell.exec("mkdir -p /data/adb/virtualcam && echo 1").isSuccess
 
@@ -50,7 +72,12 @@ class PrerequisiteChecker(
             moduleInstalled = moduleInstalled,
             camera1Ready = camera1,
             moduleControlDir = control,
-            moduleVersion = version
+            moduleVersion = version,
+            zygiskLibPresent = zygiskLib,
+            hookStatus = hookStatus,
+            lastHookPkg = lastPkg,
+            vcamEnabled = enabled,
+            hasVirtualVideo = hasVideo
         )
     }
 }

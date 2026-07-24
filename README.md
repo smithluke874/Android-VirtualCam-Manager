@@ -3,54 +3,46 @@
 **Pure Magisk module + single controller APK**  
 **NO LSPosed / NO Xposed.**
 
-Automate classic android_virtual_cam paths and flags entirely from the APK. Zygisk native module reads the same control plane for process-level activation (frame injection hooks in progress).
+## v1.5.0 status
 
-## Only two components
-
-1. **Magisk Module** — boot paths, Zygisk native lib, control dir  
-2. **Manager APK** — one-tap enable/disable, import video, flags
-
-## Status (v1.4.0)
-
-| Feature | Status |
-|---------|--------|
-| Magisk paths + flags env | Working |
-| APK one-tap auto-setup / enable | Working |
-| Import virtual.mp4 from Downloads | Working |
-| Flag toggles (disable, private_dir, …) | Working |
-| Zygisk companion + process gate | Source ready (CI builds .so) |
-| Camera1/Camera2 frame injection | Stub / next iteration |
+| Component | Status |
+|-----------|--------|
+| Magisk paths + flags | Working |
+| APK one-tap enable / Import video | Working |
+| Zygisk native `.so` (arm64 / armv7 / x86_64) | **Built by CI** |
+| Process gate + companion + hook_status | Working |
+| Camera frame injection | Next (LSPlant ART hooks) |
 
 ## Download
 
-GitHub **Actions** → latest green run → Artifacts:
+[Actions → latest green run → Artifacts](https://github.com/smithluke874/Android-VirtualCam-Manager/actions)
 
 - `VirtualCam-Manager-debug` / `release`
-- `VirtualCam-Manager-Magisk-v1.4.0`
+- `VirtualCam-Manager-Magisk-v1.5.0` (includes compiled Zygisk `.so`)
 
-## Install (fully automated after flash)
+## Install
 
-1. Magisk → enable **Zygisk** → flash module zip → reboot  
+1. Magisk → **Zygisk ON** → flash Magisk zip → reboot  
 2. Install APK → grant root  
-3. Home → toggle **ON** (or **Run full auto-setup**)  
-4. Media → put `virtual.mp4` in Download → **Import from Downloads**  
-5. Optional flags in Settings  
+3. Home → **ON**  
+4. Media → put `virtual.mp4` in Download → **Import**  
+5. Open a camera app → return to Home → check **hook status** (`active` = Zygisk gated that app)
 
-## Control plane (APK ↔ Zygisk)
+## Control plane
 
 ```
-/data/adb/virtualcam/enabled          # 1=on 0=off
-/data/adb/virtualcam/config
-/storage/emulated/0/DCIM/Camera1/virtual.mp4
-/storage/emulated/0/DCIM/Camera1/disable.jpg
-...
+/data/adb/virtualcam/enabled
+/data/adb/virtualcam/hook_status      # idle | active | no_video
+/data/adb/virtualcam/last_hook_pkg
+/DCIM/Camera1/virtual.mp4
+/DCIM/Camera1/disable.jpg
 ```
 
-## Requirements
+## Architecture
 
-- Magisk 27+ with Zygisk  
-- Rooted Android 8–16  
-- **No LSPosed**
+- **APK** = full automation UI (root)
+- **Magisk** = boot paths + ships Zygisk `.so`
+- **Zygisk** = per-app gate + status feedback; frame path uses LSPlant next
 
 ## Disclaimer
 

@@ -1,7 +1,7 @@
 #!/system/bin/sh
 SKIPUNZIP=1
 
-ui_print "- VirtualCam Manager v1.4.0"
+ui_print "- VirtualCam Manager v1.5.0"
 ui_print "- Pure Magisk + single controller APK"
 ui_print "- No LSPosed required"
 
@@ -16,13 +16,20 @@ mkdir -p /sdcard/DCIM/Camera1 2>/dev/null || true
 mkdir -p /data/adb/virtualcam
 chmod 755 /data/adb/virtualcam
 touch /data/adb/virtualcam/module_installed
-echo "v1.4.0" > /data/adb/virtualcam/version
-# Default to enabled so APK one-tap works after first flash
+echo "v1.5.0" > /data/adb/virtualcam/version
 echo 1 > /data/adb/virtualcam/enabled
+echo "idle" > /data/adb/virtualcam/hook_status
 
-# Zygisk libs (present when CI built them)
 mkdir -p $MODPATH/zygisk
 
-ui_print "- Paths + Zygisk dir ready"
-ui_print "- Install the APK, grant root, toggle ON"
+# Report whether native libs are present
+if [ -f $MODPATH/zygisk/arm64-v8a.so ]; then
+  ui_print "- Zygisk native: arm64-v8a.so OK"
+elif [ -f $MODPATH/zygisk/armeabi-v7a.so ]; then
+  ui_print "- Zygisk native: armeabi-v7a.so OK"
+else
+  ui_print "- Zygisk native: placeholder (rebuild CI for .so)"
+fi
+
+ui_print "- Install APK → grant root → toggle ON"
 ui_print "- Done. Reboot recommended."

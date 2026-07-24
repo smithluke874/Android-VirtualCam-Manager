@@ -42,7 +42,6 @@ fun HomeScreen() {
     }
 
     LaunchedEffect(Unit) {
-        // Auto-prepare paths on every launch when root is available
         status = checker.check()
         if (status?.rootAvailable == true) {
             autoSetup.runFullSetup(enable = autoSetup.isEnabled())
@@ -74,12 +73,11 @@ fun HomeScreen() {
         ) {
             Text("One-tap control", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Pure Magisk + single APK — everything automated from here",
+                text = "Pure Magisk + single APK — automate everything from here",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Primary enable / disable
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -87,7 +85,10 @@ fun HomeScreen() {
                     else MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -99,8 +100,8 @@ fun HomeScreen() {
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                if (enabled) "disable.jpg removed · enabled=1 written"
-                                else "Tap Enable to prepare paths + activate",
+                                if (enabled) "enabled=1 · disable.jpg cleared"
+                                else "Tap to prepare paths + activate",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -157,15 +158,35 @@ fun HomeScreen() {
                         title = if (s.moduleVersion != null) "Module (${s.moduleVersion})" else "VirtualCam Module",
                         ok = s.moduleInstalled
                     )
+                    StatusCard("Zygisk .so installed", s.zygiskLibPresent)
                     StatusCard("Camera1 Directory", s.camera1Ready)
-                    StatusCard("Control Dir", s.moduleControlDir)
+                    StatusCard("virtual.mp4 present", s.hasVirtualVideo)
+                    StatusCard("Control plane enabled", s.vcamEnabled)
+
+                    if (s.hookStatus != null) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("Zygisk hook status", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "status: ${s.hookStatus}" +
+                                            (s.lastHookPkg?.let { "\nlast pkg: $it" } ?: ""),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "Open a camera app after import to trigger Zygisk. status becomes 'active' when gated.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
 
                     if (!s.moduleInstalled) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.12f))
                         ) {
                             Text(
-                                text = "Flash VirtualCam-Manager-Magisk zip in Magisk, then reboot. APK still manages paths/flags without it.",
+                                text = "Flash Magisk module from Actions artifact, then reboot.",
                                 modifier = Modifier.padding(12.dp),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -176,12 +197,11 @@ fun HomeScreen() {
 
             Text("Flow", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "1. Flash Magisk module once + reboot\n" +
-                        "2. Open this APK → grant root\n" +
-                        "3. Toggle ON (or Run full auto-setup)\n" +
-                        "4. Media tab → Import virtual.mp4\n" +
-                        "5. Settings → optional flags\n" +
-                        "Zygisk native hooks (frame injection) load with the module when built.",
+                text = "1. Magisk → enable Zygisk → flash module → reboot\n" +
+                        "2. Install APK → grant root → toggle ON\n" +
+                        "3. Media → Import virtual.mp4\n" +
+                        "4. Open any camera app → refresh Home (hook status)\n" +
+                        "5. Frame replacement lands with LSPlant hooks (next)",
                 style = MaterialTheme.typography.bodyMedium
             )
         }

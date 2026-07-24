@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.4.0
-versionCode=140
+version=v1.5.0
+versionCode=150
 author=smithluke874
-description=Pure Magisk + companion APK (NO LSPosed). Classic VCAM paths/flags + Zygisk native control plane. Frame injection hooks in progress.
+description=Pure Magisk + companion APK (NO LSPosed). Paths/flags + Zygisk native with hook status feedback. Frame injection via LSPlant next.
