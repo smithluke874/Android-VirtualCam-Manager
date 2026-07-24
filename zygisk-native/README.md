@@ -1,6 +1,6 @@
 # Zygisk native module (VirtualCam)
 
-Pure Magisk Zygisk — **no LSPosed**.
+Pure Magisk Zygisk — **no LSPosed manager**.
 
 ## Build (on CI or with NDK)
 
@@ -28,12 +28,41 @@ cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
 | Path | Meaning |
 |------|---------|
 | `/data/adb/virtualcam/enabled` | `1` = on, `0` = off |
-| `/data/adb/virtualcam/config` | optional key=value |
+| `/data/adb/virtualcam/hook_status` | live status written by Zygisk |
+| `/data/adb/virtualcam/last_hook_pkg` | last package that received hooks |
+| `/data/adb/virtualcam/module_version` | e.g. 1.8.0 |
 | `/DCIM/Camera1/virtual.mp4` | source video |
 | `/DCIM/Camera1/disable.jpg` | hard off (classic flag) |
 
-## Status
+## Status values written to hook_status
 
-- Companion + enable/disable detection: **done**
-- Process selection + stay-loaded when active: **done**
-- Camera1/Camera2 frame injection: **next** (hooks stubbed in `install_hooks()`)
+- `gate_off` – enabled flag is 0 or disable.jpg present
+- `no_video` – virtual.mp4 missing or empty
+- `active` – gate open + video present, but no matching JNI natives on this ROM
+- `hooked` – JNI Camera1 native methods successfully rewritten
+- `injecting` – (future) LSPlant Java hooks + frame replacement active
+
+## Current capability
+
+- Companion process gate + enable/disable detection: **done**
+- Process selection + DLCLOSE when inactive: **done**
+- JNI native hooks on android.hardware.Camera (log + call original): **done**
+- Full visual frame injection (setPreviewTexture / NV21 overwrite): **next**
+
+## Next: LSPlant integration (pure Magisk, no LSPosed manager)
+
+Target Java methods (from docs/ORIGINAL_HOOK_ALGORITHM.md):
+
+1. `Camera.setPreviewTexture(SurfaceTexture)`
+2. `Camera.setPreviewCallback` / `setPreviewCallbackWithBuffer`
+3. `Camera.startPreview` / related
+4. PreviewCallback.onPreviewFrame for NV21 replacement
+
+Plan:
+- Add lsplant-standalone headers + static lib (or build from source in CI)
+- Provide InitInfo with inline_hooker (Dobby or equivalent) + art_symbol_resolver
+- Init in postAppSpecialize after gate opens
+- Keep existing JNI hooks as secondary / logging layer
+- Write richer status so APK can show “injecting”
+
+This keeps the project 100% Magisk module + single companion APK.
