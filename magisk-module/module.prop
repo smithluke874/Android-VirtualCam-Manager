@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.2.1
-versionCode=121
+version=v1.3.0
+versionCode=130
 author=smithluke874
-description=Pure Magisk module + companion APK controller (NO LSPosed/Xposed). Prepares exact classic VCAM paths (/DCIM/Camera1 + flag files). Zygisk-ready for native Camera hooks on latest Android.
+description=Pure Magisk module + companion APK (NO LSPosed). Classic VCAM paths + flags. Zygisk skeleton ready for native Camera1/Camera2 frame injection on latest Android.

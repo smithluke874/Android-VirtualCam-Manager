@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 fun TargetAppsScreen() {
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Info") })
+            TopAppBar(title = { Text("Architecture") })
         }
     ) { padding ->
         Column(
@@ -25,15 +25,58 @@ fun TargetAppsScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "No LSPosed Scope Needed",
+                text = "Pure Magisk + Single APK",
                 style = MaterialTheme.typography.titleLarge
             )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("What works now", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "• Magisk module creates /DCIM/Camera1 at boot\n" +
+                                "• This APK manages virtual.mp4 + all classic flag files\n" +
+                                "• No LSPosed / Xposed / second framework required\n" +
+                                "• Paths match original android_virtual_cam exactly",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("What original VCAM did", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Original VCAM was an Xposed module. It hooked:\n" +
+                                "• Camera1: PreviewCallback, PictureCallback, SurfaceTexture\n" +
+                                "• Camera2: CameraManager, CameraDevice, CaptureRequest\n" +
+                                "Then fed frames from virtual.mp4 into the app.\n\n" +
+                                "The path/flag files alone do not replace the camera feed — " +
+                                "they are the control plane the hook reads.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Next: Zygisk native hooks", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "To stay pure Magisk (no LSPosed), frame injection will be " +
+                                "implemented as Zygisk .so libraries inside this same Magisk module.\n\n" +
+                                "The zygisk/ folder is already prepared. Once the native hooks land, " +
+                                "you still only flash this one module + install this one APK.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
             Text(
-                text = "Because this is a pure Magisk + single APK solution, there is no Xposed module to enable per-app.\n\n" +
-                        "The Magisk module prepares the global Camera1 environment that the original VCAM exploit used.\n\n" +
-                        "Place your video as virtual.mp4 via the Media tab and control behaviour with the flag toggles in Settings.\n\n" +
-                        "Future Zygisk native hooks (inside the Magisk module) will provide the actual camera frame replacement without needing any second framework.",
-                style = MaterialTheme.typography.bodyLarge
+                text = "Until Zygisk hooks are complete, use this stack to prepare the " +
+                        "environment and verify paths/flags on your device. Any future " +
+                        "hook (or app that already respects the classic layout) will work " +
+                        "with the same files this APK manages.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

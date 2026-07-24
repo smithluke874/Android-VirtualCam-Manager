@@ -17,6 +17,16 @@ class FileSystemRepository {
         const val FLAG_NO_SILENT = "no-silent.jpg"
         const val FLAG_NO_TOAST = "no_toast.jpg"
         const val FLAG_FORCE_SHOW = "force_show.jpg"
+
+        // Common places users drop a test video
+        val IMPORT_CANDIDATES = listOf(
+            "/storage/emulated/0/Download/virtual.mp4",
+            "/storage/emulated/0/Downloads/virtual.mp4",
+            "/sdcard/Download/virtual.mp4",
+            "/sdcard/Downloads/virtual.mp4",
+            "/storage/emulated/0/DCIM/virtual.mp4",
+            "/storage/emulated/0/Movies/virtual.mp4"
+        )
     }
 
     suspend fun ensureGlobalCamera1(): Boolean = withContext(Dispatchers.IO) {
@@ -72,10 +82,28 @@ class FileSystemRepository {
             val result = RootShell.exec(
                 "cp -f \"$sourcePath\" \"$dest\"",
                 "chmod 644 \"$dest\"",
+                "chown media_rw:media_rw \"$dest\" 2>/dev/null || true",
                 "sync"
             )
             result.isSuccess
         }
+
+    /**
+     * Looks for virtual.mp4 in common user folders and copies into Camera1.
+     * Returns the source path used, or null if nothing found.
+     */
+    suspend fun importVirtualFromDownloads(): String? = withContext(Dispatchers.IO) {
+        ensureGlobalCamera1()
+        for (candidate in IMPORT_CANDIDATES) {
+            val exists = RootShell.exec("[ -f \"$candidate\" ] && echo 1 || echo 0")
+                .out.firstOrNull()?.trim() == "1"
+            if (exists) {
+                val ok = placeVirtualVideo(candidate)
+                if (ok) return@withContext candidate
+            }
+        }
+        null
+    }
 
     suspend fun hasVirtualVideo(usePrivate: Boolean = false, packageName: String? = null): Boolean =
         withContext(Dispatchers.IO) {
@@ -89,4 +117,9 @@ class FileSystemRepository {
             val dir = if (usePrivate && packageName != null) getPrivateCamera1Path(packageName) else GLOBAL_CAMERA1
             RootShell.exec("rm -f $dir/$VIRTUAL_MP4").isSuccess
         }
+
+    suspend fun listCamera1Contents(): List<String> = withContext(Dispatchers.IO) {
+        ensureGlobalCamera1()
+        RootShell.exec("ls -la $GLOBAL_CAMERA1 2>/dev/null").out
+    }
 }

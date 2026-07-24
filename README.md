@@ -3,38 +3,39 @@
 **Pure Magisk module + single controller APK**  
 **NO LSPosed / NO Xposed required.**
 
-This project takes the classic android_virtual_cam (VCAM) exploit paths and turns them into a clean, modern **Magisk-only + one APK** solution that works on the latest rooted Android versions.
+Classic android_virtual_cam (VCAM) paths and flags, controlled by one Magisk module and one APK. Designed for latest rooted Android.
 
-## Goal
+## Components (only these two)
 
-Only two components:
-1. **Magisk Module** – prepares the exact original VCAM filesystem layout
-2. **Single APK** – root-powered controller for `virtual.mp4` + all flag files
+| Component | Role |
+|-----------|------|
+| **Magisk Module** | Creates `/DCIM/Camera1` at boot, owns Zygisk skeleton for future native frame injection |
+| **Manager APK** | Root UI to place `virtual.mp4`, toggle flag files, show status |
 
-No LSPosed. No Xposed. No extra frameworks.
+No LSPosed. No Xposed. No second framework.
 
-## Current Status
+## Status
 
-| Component              | Status                          |
-|------------------------|---------------------------------|
-| Magisk Module          | **v1.2.0 ready**                |
-| Controller APK         | Source complete + GitHub Actions builds |
-| Zygisk native hooks    | Planned (for real frame injection) |
+| Feature | Status |
+|---------|--------|
+| Magisk module (paths + flags env) | **v1.3.0 ready** |
+| Manager APK (Compose + libsu) | **Builds via GitHub Actions** |
+| Classic path/flag control | **Working** |
+| Zygisk native Camera hooks | Skeleton ready — implementation next |
 
-> **Important**: The Magisk module + APK fully manage the classic paths and flags the original VCAM used. Actual camera frame replacement (Camera1 / Camera2 interception) still requires the native Zygisk component that is under development. Until then, the environment is 100% prepared for any future hook or for apps that respect the classic file-based control.
+> **Honest note:** Original VCAM replaced camera frames by **Xposed-hooking** Camera1/Camera2 APIs, then reading `virtual.mp4` from Camera1. Our Magisk module + APK fully own that control plane. Real frame injection without LSPosed requires the Zygisk native libraries (in progress under `magisk-module/zygisk/`).
 
 ## Download
 
 ### Magisk Module
-- Latest: `VirtualCam-Manager-Magisk-v1.2.0.zip` (see Releases or `magisk-module/`)
+- Flash `VirtualCam-Manager-Magisk-v1.3.0.zip` (build from `magisk-module/` or project artifacts)
 
 ### APK
-GitHub Actions builds the APK on every push to `main`.  
-Go to **Actions → Build APK → latest successful run → Artifacts** and download:
-- `VirtualCam-Manager-debug`
-- `VirtualCam-Manager-release`
+- **Actions → Build APK → latest green run → Artifacts**
+  - `VirtualCam-Manager-debug`
+  - `VirtualCam-Manager-release`
 
-## Classic paths preserved exactly
+## Classic paths (exact)
 
 ```
 /storage/emulated/0/DCIM/Camera1/virtual.mp4
@@ -48,24 +49,26 @@ Go to **Actions → Build APK → latest successful run → Artifacts** and down
 Private mode (when `private_dir.jpg` exists):
 `/storage/emulated/0/Android/data/<package>/files/Camera1/`
 
+## Install & test
+
+1. Enable **Zygisk** in Magisk settings (needed later for native hooks; harmless now)
+2. Flash Magisk module → reboot
+3. Install Manager APK → grant root
+4. Home tab: confirm Root / Magisk / Module / Camera1 are green
+5. Put a video named `virtual.mp4` in **Download**
+6. Media tab → **Import from Downloads**
+7. Settings tab → toggle flags and verify files under Camera1
+
 ## Requirements
 
-- Magisk 27+ (or Magisk Alpha / Kitsune)
-- Rooted Android 8.0 – 16 (target latest)
+- Magisk 27+ (Zygisk available)
+- Rooted Android 8 – 16
 - **No LSPosed / EdXposed / Xposed**
 
-## How to use
+## Building
 
-1. Flash the Magisk module and reboot
-2. Install the VirtualCam Manager APK (from Actions artifacts)
-3. Grant root to the APK
-4. Use Media tab → prepare directory / place your `virtual.mp4`
-5. Use Settings tab → toggle the classic flags
-
-## Building locally
-
-See [BUILD.md](BUILD.md).
+See [BUILD.md](BUILD.md). APK builds automatically on every push to `main`.
 
 ## Disclaimer
 
-For legitimate privacy research, testing, and development only. Do not use for any illegal purpose.
+For legitimate privacy research, testing, and development only. Do not use for illegal purposes.
