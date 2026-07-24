@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -22,9 +23,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -127,7 +128,7 @@ fun MediaHubScreen() {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            if (hasVideo) Icons.Default.VideoFile else Icons.Default.Upload,
+                            imageVector = if (hasVideo) Icons.Default.VideoFile else Icons.Default.Upload,
                             contentDescription = null,
                             tint = if (hasVideo) Success else Primary
                         )
@@ -143,13 +144,23 @@ fun MediaHubScreen() {
                     }
 
                     if (importing || isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(36.dp).width(36.dp),
+                                color = Primary
+                            )
+                        }
                     }
 
                     Button(
                         onClick = {
                             pickVideo.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.VideoOnly
+                                )
                             )
                         },
                         enabled = !importing,
@@ -163,7 +174,9 @@ fun MediaHubScreen() {
                     Button(
                         onClick = {
                             pickImage.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
                             )
                         },
                         enabled = !importing,
@@ -229,15 +242,16 @@ fun MediaHubScreen() {
                 }
             }
 
-            message?.let {
+            message?.let { msg ->
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = if (messageOk) Success.copy(alpha = 0.15f)
                         else Danger.copy(alpha = 0.12f)
                     )
                 ) {
                     Text(
-                        text = it,
+                        text = msg,
                         modifier = Modifier.padding(12.dp),
                         style = MaterialTheme.typography.bodyMedium
                     )
