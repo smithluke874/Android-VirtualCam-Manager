@@ -33,7 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.Modifier.Modifier
 import androidx.compose.ui.unit.dp
 import com.virtualcam.manager.data.AutoSetup
 import com.virtualcam.manager.data.PrerequisiteChecker
@@ -87,7 +87,7 @@ fun HomeScreen() {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
+            modifier = androidx.compose.ui.Modifier.Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
@@ -102,22 +102,22 @@ fun HomeScreen() {
             )
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = if (enabled) Success.copy(alpha = 0.15f)
                     else MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = androidx.compose.ui.modifier.modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = androidx.compose.ui.modifier.modifier.weight(1f)) {
                             Text(
                                 if (enabled) "VirtualCam is ON" else "VirtualCam is OFF",
                                 style = MaterialTheme.typography.titleMedium
@@ -156,7 +156,7 @@ fun HomeScreen() {
                             }
                         },
                         enabled = !busy && status?.rootAvailable == true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth()
                     ) {
                         Text(if (busy) "Working…" else "Run full auto-setup")
                     }
@@ -170,7 +170,10 @@ fun HomeScreen() {
             Text("System status", style = MaterialTheme.typography.titleMedium)
 
             if (isLoading) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Primary)
                 }
             } else {
@@ -187,14 +190,14 @@ fun HomeScreen() {
                     StatusCard("Control plane enabled", s.vcamEnabled)
 
                     if (s.hookStatus != null) {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(12.dp)) {
+                        Card(modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth()) {
+                            Column(modifier = androidx.compose.ui.modifier.modifier.padding(12.dp)) {
                                 Text("Zygisk hook status", style = MaterialTheme.typography.titleSmall)
                                 Text(
                                     text = "status: ${s.hookStatus}" +
                                             (s.lastHookPkg?.let { "\nlast pkg: $it" } ?: "") +
                                             "\n\nhooked = JNI natives attached\n" +
-                                            "active = gate OK, awaiting LSPlant Java hooks\n" +
+                                            "active = gate OK (LSPlant Java hooks next)\n" +
                                             "no_video = place media in Media tab",
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -208,7 +211,7 @@ fun HomeScreen() {
                         ) {
                             Text(
                                 text = "Flash Magisk module from Actions artifact, then reboot.",
-                                modifier = Modifier.padding(12.dp),
+                                modifier = androidx.compose.ui.Modifier.modifier.padding(12.dp),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -232,13 +235,13 @@ fun HomeScreen() {
 @Composable
 private fun StatusCard(title: String, ok: Boolean) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = androidx.compose.ui.modifier.modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
         Row(
-            modifier = Modifier
+            modifier = androidx.compose.ui.modifier.modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
