@@ -23,20 +23,27 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Grant execute permission for gradlew
+      - name: Create Gradle Wrapper
         working-directory: manager-app
         run: |
           if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.9
+            gradle wrapper --gradle-version 8.9 --distribution-type bin
           fi
           chmod +x gradlew
+          ls -la
 
       - name: Build Debug APK
         working-directory: manager-app
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: |
+          ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log
+          # Also print any e: lines for easy diagnosis
+          grep -E "^e: |error:|FAILED|Unresolved" build.log || true
 
       - name: Build Release APK
         working-directory: manager-app
