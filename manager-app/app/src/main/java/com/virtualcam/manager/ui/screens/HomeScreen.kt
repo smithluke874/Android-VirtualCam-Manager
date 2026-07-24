@@ -73,7 +73,7 @@ fun HomeScreen() {
         ) {
             Text("One-tap control", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Pure Magisk + single APK — automate everything from here",
+                text = "Pure Magisk + single APK — pick media in Media tab, toggle ON here",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -172,11 +172,6 @@ fun HomeScreen() {
                                             (s.lastHookPkg?.let { "\nlast pkg: $it" } ?: ""),
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Text(
-                                    text = "Open a camera app after import to trigger Zygisk. status becomes 'active' when gated.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
@@ -197,11 +192,11 @@ fun HomeScreen() {
 
             Text("Flow", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "1. Magisk → enable Zygisk → flash module → reboot\n" +
+                text = "1. Magisk → Zygisk ON → flash module → reboot\n" +
                         "2. Install APK → grant root → toggle ON\n" +
-                        "3. Media → Import virtual.mp4\n" +
-                        "4. Open any camera app → refresh Home (hook status)\n" +
-                        "5. Frame replacement lands with LSPlant hooks (next)",
+                        "3. Media tab → Pick video or image (auto-installs virtual.mp4)\n" +
+                        "4. Open camera app → frames inject from your media\n" +
+                        "5. Images become a short looping MP4 automatically",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
