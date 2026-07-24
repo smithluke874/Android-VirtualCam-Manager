@@ -40,9 +40,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier as ComposeModifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.\u004dodifier as ComposeModifier
 import com.virtualcam.manager.data.FileSystemRepository
 import com.virtualcam.manager.data.MediaImportHelper
 import com.virtualcam.manager.ui.theme.Danger
@@ -95,12 +95,19 @@ fun MediaHubScreen() {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Media Hub") }) }) { padding ->
         Column(
-            modifier = ComposeModifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
+            modifier = ComposeModifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Upload spoof media", style = MaterialTheme.typography.titleLarge)
             Card(modifier = ComposeModifier.fillMaxWidth()) {
-                Column(modifier = ComposeModifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = ComposeModifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             if (hasVideo) Icons.Default.VideoFile else Icons.Default.Upload,
@@ -110,14 +117,24 @@ fun MediaHubScreen() {
                         Spacer(modifier = ComposeModifier.width(12.dp))
                         Column {
                             Text("virtual.mp4", style = MaterialTheme.typography.titleMedium)
-                            Text(if (hasVideo) "Ready" else "Not installed", color = if (hasVideo) Success else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                if (hasVideo) "Ready" else "Not installed",
+                                color = if (hasVideo) Success else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     if (importing || isLoading) {
-                        CircularProgressIndicator(modifier = ComposeModifier.height(36.dp).width(36.dp), color = Primary)
+                        CircularProgressIndicator(
+                            modifier = ComposeModifier.height(36.dp).width(36.dp),
+                            color = Primary
+                        )
                     }
                     Button(
-                        onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                        onClick = {
+                            pickVideo.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                            )
+                        },
                         enabled = !importing,
                         modifier = ComposeModifier.fillMaxWidth()
                     ) {
@@ -126,7 +143,11 @@ fun MediaHubScreen() {
                         Text("Pick video")
                     }
                     Button(
-                        onClick = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = {
+                            pickImage.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                         enabled = !importing,
                         modifier = ComposeModifier.fillMaxWidth()
                     ) {
@@ -134,7 +155,11 @@ fun MediaHubScreen() {
                         Spacer(modifier = ComposeModifier.width(8.dp))
                         Text("Pick image (→ looping MP4)")
                     }
-                    OutlinedButton(onClick = { pickAny.launch("*/*") }, enabled = !importing, modifier = ComposeModifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { pickAny.launch("*/*") },
+                        enabled = !importing,
+                        modifier = ComposeModifier.fillMaxWidth()
+                    ) {
                         Text("Pick any file")
                     }
                     if (hasVideo) {
