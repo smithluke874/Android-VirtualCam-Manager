@@ -4,15 +4,40 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.VideoFile
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,7 +86,6 @@ fun MediaHubScreen() {
         }
     }
 
-    // Modern Photo Picker (no storage permission required on API 33+)
     val pickVideo = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> onPicked(uri) }
@@ -70,7 +94,6 @@ fun MediaHubScreen() {
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> onPicked(uri) }
 
-    // Fallback GetContent for older devices / any file
     val pickAny = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> onPicked(uri) }
@@ -108,7 +131,7 @@ fun MediaHubScreen() {
                             contentDescription = null,
                             tint = if (hasVideo) Success else Primary
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier = Modifier.width(12.dp))
                         Column {
                             Text("virtual.mp4", style = MaterialTheme.typography.titleMedium)
                             Text(
@@ -120,7 +143,7 @@ fun MediaHubScreen() {
                     }
 
                     if (importing || isLoading) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
 
                     Button(
@@ -133,7 +156,7 @@ fun MediaHubScreen() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.VideoFile, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Pick video")
                     }
 
@@ -147,7 +170,7 @@ fun MediaHubScreen() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Image, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Pick image (→ looping MP4)")
                     }
 
@@ -164,12 +187,12 @@ fun MediaHubScreen() {
                             onClick = {
                                 scope.launch {
                                     val src = repo.importVirtualFromDownloads()
-                                    message = if (src != null) {
+                                    if (src != null) {
                                         messageOk = true
-                                        "Imported from Downloads:\n$src"
+                                        message = "Imported from Downloads:\n$src"
                                     } else {
                                         messageOk = false
-                                        "No virtual.mp4 found in Download/DCIM/Movies"
+                                        message = "No virtual.mp4 found in Download/DCIM/Movies"
                                     }
                                     refresh()
                                 }
@@ -213,14 +236,18 @@ fun MediaHubScreen() {
                         else Danger.copy(alpha = 0.12f)
                     )
                 ) {
-                    Text(it, Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = it,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
 
             if (listing.isNotEmpty()) {
                 Text("Camera1 contents", style = MaterialTheme.typography.titleMedium)
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         listing.forEach { line ->
                             Text(line, style = MaterialTheme.typography.bodySmall)
                         }
