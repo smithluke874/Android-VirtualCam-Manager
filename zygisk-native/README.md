@@ -30,7 +30,7 @@ cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
 | `/data/adb/virtualcam/enabled` | `1` = on, `0` = off |
 | `/data/adb/virtualcam/hook_status` | live status written by Zygisk |
 | `/data/adb/virtualcam/last_hook_pkg` | last package that received hooks |
-| `/data/adb/virtualcam/module_version` | e.g. 1.8.0 |
+| `/data/adb/virtualcam/module_version` / `version` | e.g. 1.9.0 |
 | `/DCIM/Camera1/virtual.mp4` | source video |
 | `/DCIM/Camera1/disable.jpg` | hard off (classic flag) |
 
@@ -40,26 +40,29 @@ cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
 - `no_video` – virtual.mp4 missing or empty
 - `active` – gate open + video present, but no matching JNI natives on this ROM
 - `hooked` – JNI Camera1 native methods successfully rewritten
+- `preparing` – (v1.9+) LSPlant scaffold active, waiting for real Init/Hook
 - `injecting` – (future) LSPlant Java hooks + frame replacement active
 
-## Current capability
+## Current capability (v1.9.0)
 
 - Companion process gate + enable/disable detection: **done**
 - Process selection + DLCLOSE when inactive: **done**
 - JNI native hooks on android.hardware.Camera (log + call original): **done**
+- Module version written from native + service.sh: **done**
+- LSPlant InitInfo shape + target method list documented in source: **done**
 - Full visual frame injection (setPreviewTexture / NV21 overwrite): **next**
 
-## Next: LSPlant integration (pure Magisk, no LSPosed manager)
+## Next: real LSPlant integration (pure Magisk, no LSPosed manager)
 
 Target Java methods (from docs/ORIGINAL_HOOK_ALGORITHM.md):
 
 1. `Camera.setPreviewTexture(SurfaceTexture)`
-2. `Camera.setPreviewCallback` / `setPreviewCallbackWithBuffer`
-3. `Camera.startPreview` / related
-4. PreviewCallback.onPreviewFrame for NV21 replacement
+2. `Camera.setPreviewCallback` / `setPreviewCallbackWithBuffer` / `setOneShotPreviewCallback`
+3. `Camera.startPreview`
+4. `PreviewCallback.onPreviewFrame` for NV21 replacement
 
 Plan:
-- Add lsplant-standalone headers + static lib (or build from source in CI)
+- Add lsplant-standalone headers + static lib (or build from source in CI with CMake)
 - Provide InitInfo with inline_hooker (Dobby or equivalent) + art_symbol_resolver
 - Init in postAppSpecialize after gate opens
 - Keep existing JNI hooks as secondary / logging layer

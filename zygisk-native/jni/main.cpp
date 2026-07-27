@@ -1,25 +1,39 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.8.0
+ * VirtualCam Manager — Zygisk native module v1.9.0
  * Pure Magisk (NO LSPosed manager).
  *
- * v1.8.0:
+ * v1.9.0:
  *  - Companion control-plane gate (enabled + video + !disable)
- *  - VideoFrameProvider validates virtual.mp4
+ *  - VideoFrameProvider validates virtual.mp4 + size
  *  - hookJniNativeMethods on android.hardware.Camera native methods
- *  - Reports hooked / active / no_video / gate_off to APK via hook_status
- *  - Scaffolding notes for LSPlant ART Java hooks (next milestone)
+ *  - Reports hooked / active / no_video / gate_off / preparing to APK
+ *  - Explicit LSPlant scaffolding (InitInfo shape + target Java methods)
+ *  - Writes module version from native side for APK detection
  *
  * Still needed for full visual spoof on all apps:
- *  - LSPlant ART hooks for Java setPreviewTexture / PreviewCallback
+ *  - Real LSPlant ART hooks for Java setPreviewTexture / PreviewCallback
  *  - MediaPlayer surface + NV21 overwrite (docs/ORIGINAL_HOOK_ALGORITHM.md)
+ *  - Camera2 / CameraX surface redirect
  *
  * LSPlant plan (pure Magisk, no LSPosed manager):
- *  1. Add lsplant-standalone headers + static library (or build in CI)
- *  2. Provide InitInfo { inline_hooker, inline_unhooker, art_symbol_resolver }
+ *  1. Vendor lsplant-standalone headers + static .a (or build from source in CI)
+ *  2. Provide InitInfo {
+ *         .inline_hooker   = dobby_or_custom_hook,
+ *         .inline_unhooker = dobby_or_custom_unhook,
+ *         .art_symbol_resolver = resolve_from_libart
+ *     }
  *  3. Call lsplant::Init(env, info) in postAppSpecialize after gate opens
- *  4. Hook Java methods via reflection Method objects + callback
+ *  4. Reflect Method objects for the targets below and call lsplant::Hook
  *  5. Keep current JNI hooks as secondary / logging layer
  *  6. Write status "injecting" once frames are actually replaced
+ *
+ * Target Java methods (from original HookMain / docs/ORIGINAL_HOOK_ALGORITHM.md):
+ *  - android.hardware.Camera.setPreviewTexture(Landroid/graphics/SurfaceTexture;)V
+ *  - android.hardware.Camera.setPreviewCallback(Landroid/hardware/Camera$PreviewCallback;)V
+ *  - android.hardware.Camera.setPreviewCallbackWithBuffer(...)
+ *  - android.hardware.Camera.setOneShotPreviewCallback(...)
+ *  - android.hardware.Camera.startPreview()V
+ *  - PreviewCallback.onPreviewFrame([BLandroid/hardware/Camera;)V  (NV21 overwrite)
  */
 
 #include <cstdlib>
@@ -42,11 +56,13 @@ using zygisk::ServerSpecializeArgs;
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-static constexpr const char *kEnabledPath  = "/data/adb/virtualcam/enabled";
-static constexpr const char *kCamera1Video = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
-static constexpr const char *kDisableFlag  = "/storage/emulated/0/DCIM/Camera1/disable.jpg";
-static constexpr const char *kHookStatus   = "/data/adb/virtualcam/hook_status";
-static constexpr const char *kLastPkg      = "/data/adb/virtualcam/last_hook_pkg";
+static constexpr const char *kEnabledPath   = "/data/adb/virtualcam/enabled";
+static constexpr const char *kCamera1Video  = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+static constexpr const char *kDisableFlag   = "/storage/emulated/0/DCIM/Camera1/disable.jpg";
+static constexpr const char *kHookStatus    = "/data/adb/virtualcam/hook_status";
+static constexpr const char *kLastPkg       = "/data/adb/virtualcam/last_hook_pkg";
+static constexpr const char *kModuleVersion = "/data/adb/virtualcam/module_version";
+static constexpr const char *kVersionFile   = "/data/adb/virtualcam/version";
 
 struct VcamState {
     bool global_enabled = false;
@@ -82,6 +98,11 @@ static void report_status(const char *pkg, const char *status) {
     write_text(kLastPkg, pkg);
 }
 
+static void write_module_version() {
+    write_text(kModuleVersion, "1.9.0");
+    write_text(kVersionFile, "1.9.0");
+}
+
 class VideoFrameProvider {
 public:
     bool open(const char *path) {
@@ -102,6 +123,10 @@ public:
     bool isOpen() const { return opened_; }
     const char *path() const { return path_.c_str(); }
     off_t size() const { return size_; }
+
+    /* Future: decode current frame to NV21 buffer for PreviewCallback overwrite */
+    // bool getNextNv21(uint8_t *out, size_t out_len, int width, int height);
+
 private:
     std::string path_;
     off_t size_ = 0;
@@ -126,6 +151,7 @@ static void hooked_native_setup(JNIEnv *env, jobject thiz, jobject weak) {
 
 static void hooked_native_startPreview(JNIEnv *env, jobject thiz) {
     LOGI("hook: native_startPreview — video=%s", g_video.isOpen() ? g_video.path() : "none");
+    /* Future LSPlant: ensure MediaPlayer is started against fake SurfaceTexture here */
     if (orig_native_startPreview) orig_native_startPreview(env, thiz);
 }
 
@@ -142,6 +168,7 @@ static void hooked_native_setPreviewDisplay(JNIEnv *env, jobject thiz, jobject s
 
 static void hooked_native_setPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
     LOGI("hook: native_setPreviewCallback cb=%p", cb);
+    /* Future: wrap the callback so onPreviewFrame receives NV21 from VideoFrameProvider */
     if (orig_native_setPreviewCallback) orig_native_setPreviewCallback(env, thiz, cb);
 }
 
@@ -199,6 +226,38 @@ static int install_jni_hooks(JNIEnv *env) {
     return hooked;
 }
 
+/*
+ * LSPlant scaffolding — do NOT call until the static library + inline hooker
+ * are linked. This documents the exact shape required so the next commit can
+ * drop in the real Init + Hook calls without redesign.
+ *
+ * Expected future flow after #include <lsplant.hpp> and linking:
+ *
+ *   lsplant::InitInfo info{
+ *       .inline_hooker = [](void *target, void *hooker) -> void* {
+ *           // return DobbyHook / custom inline hook result
+ *           return nullptr;
+ *       },
+ *       .inline_unhooker = [](void *func) -> bool {
+ *           return false;
+ *       },
+ *       .art_symbol_resolver = [](const char *symbol) -> void* {
+ *           // resolve from libart.so (dlopen + dlsym or /proc/self/maps scan)
+ *           return nullptr;
+ *       }
+ *   };
+ *   if (!lsplant::Init(env, info)) { LOGE("LSPlant Init failed"); return; }
+ *
+ *   // Then obtain jmethodID / Method objects via FindClass + GetMethodID
+ *   // and call lsplant::Hook(target, hooker_object, callback_method)
+ */
+static void prepare_lsplant_scaffold(JNIEnv *env) {
+    if (!env) return;
+    LOGI("LSPlant scaffold present — real Init/Hook not yet linked (v1.9.0)");
+    // Placeholder so status can later become "injecting"
+    // report_status(..., "preparing");
+}
+
 class VirtualCamModule : public zygisk::ModuleBase {
 public:
     void onLoad(Api *api, JNIEnv *env) override {
@@ -250,6 +309,7 @@ public:
     void postAppSpecialize(const AppSpecializeArgs *args) override {
         if (!state.should_hook) return;
 
+        write_module_version();
         LOGI("postAppSpecialize: VirtualCam active for %s", state.process);
 
         if (!g_video.open(kCamera1Video)) {
@@ -257,10 +317,8 @@ public:
             return;
         }
 
-        /*
-         * Future: LSPlant Init + Java method hooks go here.
-         * After successful LSPlant frame injection, report_status(..., "injecting");
-         */
+        /* LSPlant Init + Java method hooks will go here once linked */
+        prepare_lsplant_scaffold(env);
 
         int n = install_jni_hooks(env);
         if (n > 0) {

@@ -19,6 +19,8 @@ chmod 644 /data/adb/virtualcam/enabled 2>/dev/null
 chmod 644 /data/adb/virtualcam/hook_status 2>/dev/null
 chmod 644 /data/adb/virtualcam/last_hook_pkg 2>/dev/null
 
-# Marker so APK can detect module version
-echo -n "1.8.0" > /data/adb/virtualcam/module_version
+# Marker so APK can detect module version (both names for compatibility)
+echo -n "1.9.0" > /data/adb/virtualcam/module_version
+echo -n "1.9.0" > /data/adb/virtualcam/version
 chmod 644 /data/adb/virtualcam/module_version 2>/dev/null
+chmod 644 /data/adb/virtualcam/version 2>/dev/null
