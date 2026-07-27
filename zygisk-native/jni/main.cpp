@@ -1,14 +1,15 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.9.0
+ * VirtualCam Manager — Zygisk native module v1.9.1
  * Pure Magisk (NO LSPosed manager).
  *
- * v1.9.0:
+ * v1.9.1:
  *  - Companion control-plane gate (enabled + video + !disable)
  *  - VideoFrameProvider validates virtual.mp4 + size
  *  - hookJniNativeMethods on android.hardware.Camera native methods
  *  - Reports hooked / active / no_video / gate_off / preparing to APK
  *  - Explicit LSPlant scaffolding (InitInfo shape + target Java methods)
  *  - Writes module version from native side for APK detection
+ *  - prepare_lsplant_scaffold now actively writes "preparing" status
  *
  * Still needed for full visual spoof on all apps:
  *  - Real LSPlant ART hooks for Java setPreviewTexture / PreviewCallback
@@ -99,8 +100,8 @@ static void report_status(const char *pkg, const char *status) {
 }
 
 static void write_module_version() {
-    write_text(kModuleVersion, "1.9.0");
-    write_text(kVersionFile, "1.9.0");
+    write_text(kModuleVersion, "1.9.1");
+    write_text(kVersionFile, "1.9.1");
 }
 
 class VideoFrameProvider {
@@ -251,11 +252,11 @@ static int install_jni_hooks(JNIEnv *env) {
  *   // Then obtain jmethodID / Method objects via FindClass + GetMethodID
  *   // and call lsplant::Hook(target, hooker_object, callback_method)
  */
-static void prepare_lsplant_scaffold(JNIEnv *env) {
+static void prepare_lsplant_scaffold(JNIEnv *env, const char *pkg) {
     if (!env) return;
-    LOGI("LSPlant scaffold present — real Init/Hook not yet linked (v1.9.0)");
-    // Placeholder so status can later become "injecting"
-    // report_status(..., "preparing");
+    LOGI("LSPlant scaffold present — real Init/Hook not yet linked (v1.9.1)");
+    // Actively report preparing so the APK can show the next stage
+    report_status(pkg, "preparing");
 }
 
 class VirtualCamModule : public zygisk::ModuleBase {
@@ -318,7 +319,7 @@ public:
         }
 
         /* LSPlant Init + Java method hooks will go here once linked */
-        prepare_lsplant_scaffold(env);
+        prepare_lsplant_scaffold(env, state.process);
 
         int n = install_jni_hooks(env);
         if (n > 0) {
@@ -327,6 +328,7 @@ public:
                  n, state.process, g_video.path());
         } else {
             /* Gate worked, video present, but no matching JNI natives on this ROM */
+            // Keep "preparing" if we already wrote it, or fall back to active
             report_status(state.process, "active");
             LOGI("status=active (no JNI natives matched — need LSPlant for Java hooks)");
         }

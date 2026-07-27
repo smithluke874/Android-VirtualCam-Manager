@@ -30,7 +30,7 @@ cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
 | `/data/adb/virtualcam/enabled` | `1` = on, `0` = off |
 | `/data/adb/virtualcam/hook_status` | live status written by Zygisk |
 | `/data/adb/virtualcam/last_hook_pkg` | last package that received hooks |
-| `/data/adb/virtualcam/module_version` / `version` | e.g. 1.9.0 |
+| `/data/adb/virtualcam/module_version` / `version` | e.g. 1.9.1 |
 | `/DCIM/Camera1/virtual.mp4` | source video |
 | `/DCIM/Camera1/disable.jpg` | hard off (classic flag) |
 
@@ -40,16 +40,17 @@ cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
 - `no_video` – virtual.mp4 missing or empty
 - `active` – gate open + video present, but no matching JNI natives on this ROM
 - `hooked` – JNI Camera1 native methods successfully rewritten
-- `preparing` – (v1.9+) LSPlant scaffold active, waiting for real Init/Hook
+- `preparing` – LSPlant scaffold active, waiting for real Init/Hook (v1.9.1+)
 - `injecting` – (future) LSPlant Java hooks + frame replacement active
 
-## Current capability (v1.9.0)
+## Current capability (v1.9.1)
 
 - Companion process gate + enable/disable detection: **done**
 - Process selection + DLCLOSE when inactive: **done**
 - JNI native hooks on android.hardware.Camera (log + call original): **done**
 - Module version written from native + service.sh: **done**
 - LSPlant InitInfo shape + target method list documented in source: **done**
+- Status now reports **preparing** when scaffold runs: **done** (v1.9.1)
 - Full visual frame injection (setPreviewTexture / NV21 overwrite): **next**
 
 ## Next: real LSPlant integration (pure Magisk, no LSPosed manager)

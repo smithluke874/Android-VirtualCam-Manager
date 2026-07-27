@@ -5,7 +5,7 @@
 
 Reimplements classic [android_virtual_cam](https://github.com/w2016561536/android_virtual_cam) control plane under Magisk+Zygisk. Frame injection uses the same algorithm (MediaPlayer surface + NV21 callbacks) driven by LSPlant ART hooks inside our Zygisk `.so`.
 
-## Status (v1.9.0)
+## Status (v1.9.1)
 
 | Layer | Status |
 |-------|--------|
@@ -14,7 +14,8 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 | Zygisk `.so` (arm64/armv7/x86_64) | **CI builds** |
 | Process gate + `hook_status` feedback | **Working** |
 | Original algorithm documented | **Done** — `docs/ORIGINAL_HOOK_ALGORITHM.md` |
-| LSPlant scaffolding (InitInfo + targets) | **Done** (v1.9.0) |
+| LSPlant scaffolding (InitInfo + targets) | **Done** |
+| Status reports **preparing** | **Done** (v1.9.1) |
 | Real LSPlant ART hooks (frame replace) | **Next** |
 
 ## Download
@@ -22,7 +23,7 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 [Actions ← latest green run ← Artifacts](https://github.com/smithluke874/Android-VirtualCam-Manager/actions)
 
 - `VirtualCam-Manager-debug` / `release`
-- `VirtualCam-Manager-Magisk-v1.9.0` (includes Zygisk `.so`)
+- `VirtualCam-Manager-Magisk-v1.9.1` (includes Zygisk `.so`)
 
 ## Install & verify control plane
 
@@ -31,7 +32,7 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 3. Media → pick image/video → one-tap import (encodes image → looping MP4 if needed)  
 4. Open a camera app → return Home → refresh  
    - **Zygisk .so installed** = green  
-   - **hook status: hooked / active** + last package = gate works  
+   - **hook status: hooked / active / preparing** + last package = gate works  
 5. Until full LSPlant lands, the *image* is still the real camera; gate + paths + JNI hooks are live.
 
 ## Architecture
