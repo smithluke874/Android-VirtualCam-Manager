@@ -1,0 +1,28 @@
+    int32_t colorFormat = 21; int frames = 0; int errs = 0;
+    while (!stop_flag_.load()) {
+        ssize_t inIdx = AMediaCodec_dequeueInputBuffer(codec, 2000);
+        if (inIdx >= 0) {
+            size_t bufSize = 0;
+            uint8_t *buf = AMediaCodec_getInputBuffer(codec, inIdx, &bufSize);
+            ssize_t sample = AMediaExtractor_readSampleData(ex, buf, bufSize);
+            if (sample < 0) {
+                AMediaExtractor_seekTo(ex, 0, AMEDIAEXTRACTOR_SEEK_CLOSEST_SYNC);
+                sample = AMediaExtractor_readSampleData(ex, buf, bufSize);
+            }
+            if (sample >= 0) {
+                int64_t pts = AMediaExtractor_getSampleTime(ex);
+                AMediaCodec_queueInputBuffer(codec, inIdx, 0, sample, pts, 0);
+                AMediaExtractor_advance(ex);
+            } else {
+                AMediaCodec_queueInputBuffer(codec, inIdx, 0, 0, 0, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+            }
+        }
+        AMediaCodecBufferInfo info;
+        ssize_t outIdx = AMediaCodec_dequeueOutputBuffer(codec, &info, 2000);
+        if (outIdx >= 0) {
+            if (info.size > 0) {
+                size_t outSize = 0;
+                uint8_t *outBuf = AMediaCodec_getOutputBuffer(codec, outIdx, &outSize);
+                if (outBuf && outSize > 0) {
+                    std::lock_guard<std::mutex> lock(mu_);
+                    if ((int)decode_buf_.size() == targetW * targetH * 3 / 2) {

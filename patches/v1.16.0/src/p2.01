@@ -1,0 +1,33 @@
+                        convertToNv21(outBuf, srcW > 0 ? srcW : targetW, srcH > 0 ? srcH : targetH,
+                                      srcW > 0 ? srcW : targetW, colorFormat,
+                                      decode_buf_.data(), targetW, targetH);
+                        buf_.swap(decode_buf_);
+                        frame_count_++;
+                        frames++;
+                    }
+                }
+            }
+            AMediaCodec_releaseOutputBuffer(codec, outIdx, false);
+            errs = 0;
+        } else if (outIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+            AMediaFormat *nf = AMediaCodec_getOutputFormat(codec);
+            if (nf) {
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_COLOR_FORMAT, &colorFormat);
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_WIDTH, &srcW);
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
+                AMediaFormat_delete(nf);
+            }
+        } else if (outIdx != AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
+            if (++errs > 40) break;
+        }
+        usleep(8000);
+    }
+    AMediaCodec_stop(codec); AMediaCodec_delete(codec); AMediaExtractor_delete(ex);
+    video_mode_ = false; decoder_running_ = false;
+    LOGI("decoder exited after %d frames", frames);
+}
+
+static bool read_preview_size(JNIEnv *env, jobject camera, int *ow, int *oh) {
+    *ow = 0; *oh = 0;
+    if (!env || !camera) return false;
+    jclass camCls = env->GetObjectClass(camera);

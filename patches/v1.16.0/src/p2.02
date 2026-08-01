@@ -1,0 +1,23 @@
+    if (!camCls) { env->ExceptionClear(); return false; }
+    jmethodID getParams = env->GetMethodID(camCls, "getParameters", "()Landroid/hardware/Camera$Parameters;");
+    if (!getParams) { env->ExceptionClear(); env->DeleteLocalRef(camCls); return false; }
+    jobject params = env->CallObjectMethod(camera, getParams);
+    env->DeleteLocalRef(camCls);
+    if (!params || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    jclass pCls = env->GetObjectClass(params);
+    jmethodID getSize = env->GetMethodID(pCls, "getPreviewSize", "()Landroid/hardware/Camera$Size;");
+    if (!getSize) { env->ExceptionClear(); env->DeleteLocalRef(pCls); env->DeleteLocalRef(params); return false; }
+    jobject sizeObj = env->CallObjectMethod(params, getSize);
+    env->DeleteLocalRef(pCls); env->DeleteLocalRef(params);
+    if (!sizeObj || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    jclass sizeCls = env->GetObjectClass(sizeObj);
+    jfieldID wf = env->GetFieldID(sizeCls, "width", "I");
+    jfieldID hf = env->GetFieldID(sizeCls, "height", "I");
+    if (wf && hf) { *ow = env->GetIntField(sizeObj, wf); *oh = env->GetIntField(sizeObj, hf); }
+    env->DeleteLocalRef(sizeCls); env->DeleteLocalRef(sizeObj);
+    return *ow > 0 && *oh > 0;
+}
+extern "C" void Hooked_onPreviewFrame(JNIEnv *env, jobject thiz, jbyteArray data, jobject camera) {
+    if (data && g_nv21.isReady()) {
+        g_nv21.copyInto(env, data);
+        if ((g_nv21.frames() % 30) == 1) {
