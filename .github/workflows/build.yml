@@ -77,6 +77,19 @@ jobs:
           curl -fsSL -o zygisk-native/jni/zygisk.hpp \
             https://raw.githubusercontent.com/topjohnwu/zygisk-module-sample/master/module/jni/zygisk.hpp
 
+      - name: Fetch ArtHook sources
+        run: |
+          mkdir -p zygisk-native/third_party
+          rm -rf zygisk-native/third_party/arthook
+          git clone --depth 1 https://github.com/aimardcr/ArtHook.git zygisk-native/third_party/arthook
+          rm -rf zygisk-native/third_party/arthook/.git \
+                 zygisk-native/third_party/arthook/tests \
+                 zygisk-native/third_party/arthook/examples
+          ls -la zygisk-native/third_party/arthook/
+          ls zygisk-native/third_party/arthook/include/arthook/
+          test -f zygisk-native/third_party/arthook/include/arthook/ArtHook.h
+          test -f zygisk-native/third_party/arthook/src/hook/HookEngine.cpp
+
       - name: Build Zygisk native with CMake + ArtHook
         if: steps.setup-ndk.outcome == 'success'
         working-directory: zygisk-native
