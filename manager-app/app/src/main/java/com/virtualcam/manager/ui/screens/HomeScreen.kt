@@ -58,10 +58,10 @@ fun HomeScreen() {
         loading = false
     }
 
-    // Live status poll while enabled - keeps Home feeling alive without extra taps
+    // Live status poll while enabled — keeps Home feeling alive
     LaunchedEffect(enabled) {
         while (enabled) {
-            delay(2000)
+            delay(1500)
             status = checker.check()
         }
     }
@@ -78,7 +78,7 @@ fun HomeScreen() {
             if (r.success && status?.rootAvailable == true) {
                 setup.runFullSetup(enable = true)
                 enabled = true
-                msg = "Ready - open any camera app"
+                msg = "Ready — open any camera app"
                 msgOk = true
             }
             status = checker.check()
@@ -112,36 +112,62 @@ fun HomeScreen() {
             val modOk = s?.moduleInstalled == true || s?.zygiskLibPresent == true
             val vidOk = s?.hasVirtualVideo == true
             val hook = s?.hookStatus.orEmpty()
-            val live = enabled && (hook.startsWith("nv21_video") ||
-                    hook.startsWith("nv21_pattern") ||
-                    hook.startsWith("surface_playing") ||
-                    hook.startsWith("texture_swapped"))
+
+            // v2 GL statuses + legacy v1 names (honest live signal)
+            val live = enabled && (
+                hook.startsWith("gl_bind_redir") ||
+                hook.startsWith("decoder_frames") ||
+                hook.startsWith("gl_ready") ||
+                hook.startsWith("gl_hooked") ||
+                hook.startsWith("decoder_running") ||
+                hook.startsWith("gl_tex_created") ||
+                hook.startsWith("nv21_video") ||
+                hook.startsWith("nv21_pattern") ||
+                hook.startsWith("surface_playing") ||
+                hook.startsWith("texture_swapped")
+            )
+            val partial = enabled && (
+                hook.startsWith("gl_partial") ||
+                hook.startsWith("gl_hook_fail") ||
+                hook.startsWith("gl_hook_pending") ||
+                hook.startsWith("gl_installing") ||
+                hook.startsWith("decoder_start") ||
+                hook.startsWith("no_video")
+            )
 
             val (title, body, ok) = when {
                 !rootOk -> Triple("Grant root", "Allow root in Magisk for this app, then refresh.", false)
                 !modOk -> Triple("Flash Magisk module", "Install the Magisk zip, enable Zygisk, reboot.", false)
                 !vidOk -> Triple("Pick a video or image", "One tap below. Images become a looping video.", false)
                 !enabled -> Triple("Turn VirtualCam ON", "Flip the switch. Then open any camera app.", false)
-                live -> Triple("Working", "Camera apps are seeing your video.", true)
+                live -> Triple("Active", "Hooks + decoder running. Open a camera app to test the feed.", true)
+                partial -> Triple("Starting…", "Native path is installing or waiting for frames. Status updates automatically.", true)
                 else -> Triple("Ready", "Open any camera app. Status updates automatically.", true)
             }
 
             Card(
                 M.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (ok) Success.copy(alpha = 0.12f)
-                    else MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = when {
+                        live -> Success.copy(alpha = 0.14f)
+                        ok -> MaterialTheme.colorScheme.surfaceVariant
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
                 )
             ) {
                 Column(M.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(title, style = MaterialTheme.typography.titleLarge)
                     Text(body, style = MaterialTheme.typography.bodyMedium)
                     if (enabled && hook.isNotEmpty()) {
-                        val pkgSuffix = s?.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
+                        val pkgSuffix = s?.lastHookPkg?.let { pkg -> " · $pkg" } ?: ""
                         Text(
                             "Status: $hook$pkgSuffix",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (live) Success else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = when {
+                                live -> Success
+                                partial -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                 }
@@ -159,7 +185,7 @@ fun HomeScreen() {
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            if (enabled) "Camera apps see your video" else "Tap to turn on",
+                            if (enabled) "Native GL path active — open a camera app" else "Tap to turn on",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -238,12 +264,18 @@ fun HomeScreen() {
                     }
                 }
                 s.hookStatus?.let { hs ->
-                    val pkgSuffix = s.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
+                    val pkgSuffix = s.lastHookPkg?.let { pkg -> " · $pkg" } ?: ""
                     Text(
                         "Hook: $hs$pkgSuffix",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                Text(
+                    "v2 uses native OpenGL interception (ShadowHook + MediaCodec). " +
+                            "Device verification is required before claiming a full camera spoof.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
