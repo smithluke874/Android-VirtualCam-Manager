@@ -2,14 +2,13 @@
  * VirtualCam v2 Phase 2 — GL bind/draw redirect + MediaCodec → RGB → GL texture.
  *
  * ShadowHook is dlopen'd at runtime so the .so always links. Texture upload
- * runs only when an EGL context is current (inside the GL proxies).
+ * runs only when an EGL context is current (inside glBindTexture / glDraw*
+ * proxies). Live telemetry is written to /data/adb/virtualcam/ for the Manager
+ * APK (decoder_frames, texture_id, bind_hits).
  *
- * Honest: redirect + upload is necessary but not sufficient proof of a
- * visible virtual feed. Device verification in real camera apps is required.
- *
- * Known limitation: many Camera2/CameraX pipelines sample with
- * samplerExternalOES. A pure GL_TEXTURE_2D upload may be ignored by those
- * shaders. Phase 2.1 will add SurfaceTexture/ANativeWindow + EGLImageOES.
+ * Still not "done": device must show virtual feed in real camera apps.
+ * Many apps use samplerExternalOES — Phase 2.1 (OES SurfaceTexture / EGLImage)
+ * is required for those pipelines.
  */
 #include "gl_hooks.h"
 
@@ -46,7 +45,10 @@ namespace {
 constexpr const char *kHookStatus = "/data/adb/virtualcam/hook_status";
 constexpr const char *kVideoPathA = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
 constexpr const char *kVideoPathB = "/data/adb/virtualcam/virtual.mp4";
-constexpr GLenum kExternalOes     = 0x8D65; /* GL_TEXTURE_EXTERNAL_OES */
+constexpr const char *kFramesPath = "/data/adb/virtualcam/decoder_frames";
+constexpr const char *kTexIdPath  = "/data/adb/virtualcam/texture_id";
+constexpr const char *kBindHitsPath = "/data/adb/virtualcam/bind_hits";
+constexpr GLenum kExternalOes     = 0x8D65;
 
 std::atomic<bool> g_enabled{false};
 std::atomic<bool> g_hooks_installed{false};
@@ -60,30 +62,32 @@ std::mutex g_path_mu;
 std::string g_video_path;
 std::thread g_decoder_thread;
 
+/* Latest decoded RGB888 frame for GL upload (GL thread only reads under lock). */
 std::mutex g_frame_mu;
 std::vector<uint8_t> g_rgb;
 int g_rgb_w = 0, g_rgb_h = 0;
 std::atomic<int> g_rgb_gen{0};
 int g_uploaded_gen = -1;
 
-using glBindTexture_fn   = void (*)(GLenum, GLuint);
-using glDrawArrays_fn    = void (*)(GLenum, GLint, GLsizei);
-using glDrawElements_fn  = void (*)(GLenum, GLsizei, GLenum, const void *);
-glBindTexture_fn  orig_glBindTexture  = nullptr;
-glDrawArrays_fn   orig_glDrawArrays   = nullptr;
+using glBindTexture_fn = void (*)(GLenum, GLuint);
+using glDrawArrays_fn  = void (*)(GLenum, GLint, GLsizei);
+using glDrawElements_fn = void (*)(GLenum, GLsizei, GLenum, const void *);
+glBindTexture_fn orig_glBindTexture = nullptr;
+glDrawArrays_fn  orig_glDrawArrays  = nullptr;
 glDrawElements_fn orig_glDrawElements = nullptr;
 void *g_bind_stub = nullptr;
 void *g_draw_stub = nullptr;
 void *g_draw_el_stub = nullptr;
 void *g_shadow_lib = nullptr;
 
-using sh_init_fn   = int (*)(int mode, bool debuggable);
-using sh_hook_fn   = void *(*)(const char *lib, const char *sym, void *new_addr, void **orig);
+/* Runtime ShadowHook API (optional). */
+using sh_init_fn = int (*)(int mode, bool debuggable);
+using sh_hook_fn = void *(*)(const char *lib, const char *sym, void *new_addr, void **orig);
 using sh_unhook_fn = int (*)(void *stub);
-using sh_errno_fn  = int (*)();
+using sh_errno_fn = int (*)();
 using sh_errmsg_fn = const char *(*)(int);
-sh_init_fn   p_sh_init   = nullptr;
-sh_hook_fn   p_sh_hook   = nullptr;
+sh_init_fn  p_sh_init  = nullptr;
+sh_hook_fn  p_sh_hook  = nullptr;
 sh_unhook_fn p_sh_unhook = nullptr;
 sh_errno_fn  p_sh_errno  = nullptr;
 sh_errmsg_fn p_sh_errmsg = nullptr;
@@ -94,6 +98,22 @@ void report(const char *status) {
         if (status) write(fd, status, strlen(status));
         close(fd);
     }
+}
+
+void write_num(const char *path, long long v) {
+    char buf[32];
+    int n = snprintf(buf, sizeof(buf), "%lld", v);
+    if (n <= 0) return;
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+        write(fd, buf, (size_t)n);
+        close(fd);
+    }
+}
+
+void publish_telemetry() {
+    write_num(kFramesPath, (long long)g_frames.load());
+    write_num(kTexIdPath, (long long)g_vtex.load());
 }
 
 bool file_ok(const char *path) {
@@ -110,6 +130,7 @@ const char *resolve_video() {
     return nullptr;
 }
 
+/* NV12/NV21-ish semi-planar → RGB888 (nearest, crude but fine for spoof). */
 void yuv420sp_to_rgb(const uint8_t *src, int w, int h, int stride, bool nv21,
                      std::vector<uint8_t> &rgb) {
     if (w <= 0 || h <= 0 || !src) return;
@@ -139,33 +160,35 @@ void yuv420sp_to_rgb(const uint8_t *src, int w, int h, int stride, bool nv21,
                 return (uint8_t)v;
             };
             size_t o = ((size_t)y * (size_t)w + (size_t)x) * 3;
-            rgb[o] = clip(R); rgb[o + 1] = clip(G); rgb[o + 2] = clip(B);
+            rgb[o] = clip(R);
+            rgb[o + 1] = clip(G);
+            rgb[o + 2] = clip(B);
         }
     }
 }
 
+/* Color bars so bind redirects are visible even before the first decoded frame. */
 void fill_test_pattern(int w, int h, int gen, std::vector<uint8_t> &rgb) {
     if (w <= 0 || h <= 0) { w = 640; h = 480; }
     rgb.resize((size_t)w * (size_t)h * 3);
-    int shift = (gen * 3) % w;
+    const int bars = 8;
+    const uint8_t colors[8][3] = {
+        {255, 255, 255}, {255, 255, 0}, {0, 255, 255}, {0, 255, 0},
+        {255, 0, 255}, {255, 0, 0}, {0, 0, 255}, {0, 0, 0}
+    };
+    int shift = (gen / 8) % bars;
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-            int bar = ((x + shift) * 6 / w) % 6;
-            uint8_t r = 0, g = 0, b = 0;
-            switch (bar) {
-                case 0: r = 255; break;
-                case 1: r = 255; g = 255; break;
-                case 2: g = 255; break;
-                case 3: g = 255; b = 255; break;
-                case 4: b = 255; break;
-                default: r = 255; b = 255; break;
-            }
+            int b = ((x * bars) / w + shift) % bars;
             size_t o = ((size_t)y * (size_t)w + (size_t)x) * 3;
-            rgb[o] = r; rgb[o + 1] = g; rgb[o + 2] = b;
+            rgb[o] = colors[b][0];
+            rgb[o + 1] = colors[b][1];
+            rgb[o + 2] = colors[b][2];
         }
     }
 }
 
+/* Called only with a current EGL context. */
 void ensure_upload_texture() {
     if (eglGetCurrentContext() == EGL_NO_CONTEXT) return;
 
@@ -174,13 +197,10 @@ void ensure_upload_texture() {
     {
         std::lock_guard<std::mutex> lock(g_frame_mu);
         if (g_rgb.empty() || g_rgb_w <= 0 || g_rgb_h <= 0) {
-            if (!g_decoder_ready.load()) {
-                fill_test_pattern(640, 480, g_rgb_gen.load(), local);
-                w = 640; h = 480;
-                gen = g_rgb_gen.load();
-            } else {
-                return;
-            }
+            /* Bootstrap with moving color bars so redirects are observable. */
+            fill_test_pattern(640, 480, g_rgb_gen.load(), local);
+            w = 640; h = 480;
+            gen = g_rgb_gen.load();
         } else {
             gen = g_rgb_gen.load();
             if (gen == g_uploaded_gen && g_vtex.load() != 0) return;
@@ -196,6 +216,7 @@ void ensure_upload_texture() {
         if (tex == 0) return;
         g_vtex = tex;
         report("gl_tex_created");
+        publish_telemetry();
         LOGI("virtual texture id=%u", (unsigned)tex);
     }
 
@@ -220,10 +241,12 @@ void hooked_glBindTexture(GLenum target, GLuint texture) {
             texture = v;
             static std::atomic<int> hits{0};
             int h = ++hits;
-            if (h == 1 || (h % 120) == 0) {
+            write_num(kBindHitsPath, (long long)h);
+            if (h == 1 || (h % 45) == 0) {
                 char buf[96];
                 snprintf(buf, sizeof(buf), "gl_bind_redir:%u#%d", (unsigned)v, h);
                 report(buf);
+                publish_telemetry();
             }
         }
     }
@@ -257,10 +280,7 @@ bool load_shadowhook() {
     };
     for (int i = 0; kCandidates[i]; i++) {
         g_shadow_lib = dlopen(kCandidates[i], RTLD_NOW);
-        if (g_shadow_lib) {
-            LOGI("ShadowHook loaded from %s", kCandidates[i]);
-            break;
-        }
+        if (g_shadow_lib) break;
     }
     if (!g_shadow_lib) return false;
 
@@ -291,9 +311,6 @@ bool install_hooks_runtime() {
 
     g_draw_stub = p_sh_hook("libGLESv2.so", "glDrawArrays",
                             (void *)hooked_glDrawArrays, (void **)&orig_glDrawArrays);
-    if (!g_draw_stub)
-        g_draw_stub = p_sh_hook("libGLESv3.so", "glDrawArrays",
-                                (void *)hooked_glDrawArrays, (void **)&orig_glDrawArrays);
 
     g_draw_el_stub = p_sh_hook("libGLESv2.so", "glDrawElements",
                                (void *)hooked_glDrawElements, (void **)&orig_glDrawElements);
@@ -309,8 +326,7 @@ bool install_hooks_runtime() {
         return false;
     }
 
-    LOGI("GL hooks installed (bind=%p drawA=%p drawE=%p)",
-         g_bind_stub, g_draw_stub, g_draw_el_stub);
+    LOGI("GL hooks installed (bind=%p draw=%p drawEl=%p)", g_bind_stub, g_draw_stub, g_draw_el_stub);
     report(g_draw_stub || g_draw_el_stub ? "gl_hooked_bind_draw" : "gl_hooked");
     g_hooks_installed = true;
     return true;
@@ -325,8 +341,6 @@ void decoder_loop() {
     }
 
     report("decoder_start");
-    LOGI("decoder opening %s", path);
-
     AMediaExtractor *ex = AMediaExtractor_new();
     if (!ex || AMediaExtractor_setDataSource(ex, path) != AMEDIA_OK) {
         if (ex) AMediaExtractor_delete(ex);
@@ -339,7 +353,7 @@ void decoder_loop() {
     AMediaFormat *fmt = nullptr;
     const char *mime = nullptr;
     int32_t srcW = 0, srcH = 0;
-    int32_t frameRate = 30;
+    float fps = 30.f;
     for (int i = 0; i < AMediaExtractor_getTrackCount(ex); i++) {
         AMediaFormat *f = AMediaExtractor_getTrackFormat(ex, i);
         const char *m = nullptr;
@@ -350,14 +364,9 @@ void decoder_loop() {
             mime = m;
             AMediaFormat_getInt32(f, AMEDIAFORMAT_KEY_WIDTH, &srcW);
             AMediaFormat_getInt32(f, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
-            float fr = 0.f;
-            if (AMediaFormat_getFloat(f, AMEDIAFORMAT_KEY_FRAME_RATE, &fr) && fr > 1.f)
-                frameRate = (int32_t)(fr + 0.5f);
-            else {
-                int32_t ifr = 0;
-                if (AMediaFormat_getInt32(f, AMEDIAFORMAT_KEY_FRAME_RATE, &ifr) && ifr > 1)
-                    frameRate = ifr;
-            }
+            float fval = 0.f;
+            if (AMediaFormat_getFloat(f, AMEDIAFORMAT_KEY_FRAME_RATE, &fval) && fval > 1.f)
+                fps = fval;
             break;
         }
         AMediaFormat_delete(f);
@@ -369,7 +378,7 @@ void decoder_loop() {
         return;
     }
     AMediaExtractor_selectTrack(ex, track);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
+    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21); /* YUV420SemiPlanar */
 
     AMediaCodec *codec = AMediaCodec_createDecoderByType(mime);
     if (!codec || AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
@@ -383,14 +392,11 @@ void decoder_loop() {
     AMediaFormat_delete(fmt);
     AMediaCodec_start(codec);
     report("decoder_running");
-    LOGI("decoder running %dx%d @~%d fps", srcW, srcH, frameRate);
 
     int32_t colorFormat = 21;
     int32_t stride = srcW > 0 ? srcW : 640;
     int frames = 0, errs = 0;
-    useconds_t frameSleep = (frameRate > 0 && frameRate < 120)
-                                ? (useconds_t)(1000000 / frameRate)
-                                : 33000;
+    const useconds_t frame_us = (useconds_t)(1000000.f / (fps > 1.f ? fps : 30.f));
 
     while (!g_stop.load()) {
         ssize_t inIdx = AMediaCodec_dequeueInputBuffer(codec, 2000);
@@ -436,7 +442,8 @@ void decoder_loop() {
                     g_frames = frames;
                     if (frames >= 1) {
                         g_decoder_ready = true;
-                        if (frames == 1 || frames == 2 || (frames % 90) == 0) {
+                        if (frames == 1 || frames == 2 || (frames % 60) == 0) {
+                            publish_telemetry();
                             char buf[96];
                             snprintf(buf, sizeof(buf), "decoder_frames:%dx%d#%d",
                                      srcW, srcH, frames);
@@ -447,7 +454,7 @@ void decoder_loop() {
             }
             AMediaCodec_releaseOutputBuffer(codec, outIdx, false);
             errs = 0;
-            usleep(frameSleep);
+            usleep(frame_us > 5000 ? frame_us : 10000);
         } else if (outIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
             AMediaFormat *nf = AMediaCodec_getOutputFormat(codec);
             if (nf) {
@@ -458,14 +465,9 @@ void decoder_loop() {
                 if (AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_STRIDE, &s) && s > 0)
                     stride = s;
                 AMediaFormat_delete(nf);
-                LOGI("output format changed: %dx%d cf=0x%x stride=%d",
-                     srcW, srcH, colorFormat, stride);
             }
         } else if (outIdx != AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-            if (++errs > 80) {
-                LOGE("too many decoder errors, exiting");
-                break;
-            }
+            if (++errs > 80) break;
         }
     }
 
