@@ -85,16 +85,18 @@ fun HomeScreen() {
         }
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("VirtualCam") },
-            actions = {
-                IconButton(onClick = { refresh() }) {
-                    Icon(Icons.Default.Refresh, "Refresh")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("VirtualCam") },
+                actions = {
+                    IconButton(onClick = { refresh() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                 }
-            }
-        )
-    }) { pad ->
+            )
+        },
+        content = { pad ->
         Column(
             M.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -261,7 +263,7 @@ fun HomeScreen() {
                 enabled = !busy && rootOk,
                 modifier = M.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Upload, null)
+                Icon(Icons.Default.Upload, contentDescription = null)
                 Spacer(M.width(8.dp))
                 Text(
                     when {
@@ -326,7 +328,7 @@ fun HomeScreen() {
                             Text(label)
                             Icon(
                                 if (good) Icons.Default.CheckCircle else Icons.Default.Error,
-                                null,
+                                contentDescription = null,
                                 tint = if (good) Success else Danger
                             )
                         }
@@ -353,5 +355,5 @@ fun HomeScreen() {
                 )
             }
         }
-    }
+    })
 }
