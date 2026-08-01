@@ -1,0 +1,63 @@
+diff --git a/zygisk-native/jni/main.cpp b/zygisk-native/jni/main.cpp
+index 387cb11..5743134 100644
+--- a/zygisk-native/jni/main.cpp
++++ b/zygisk-native/jni/main.cpp
+@@ -1,10 +1,9 @@
+ /*
+- * VirtualCam Manager — Zygisk native module v1.13.0
++ * VirtualCam Manager — Zygisk native module v1.15.0
+  * Pure Magisk (NO LSPosed). Companion gate + JNI Camera hooks + ArtHook ART hooks.
+  *
+- * v1.13.0: ArtHook integration for Camera.setPreviewTexture / startPreview
+- * so virtual.mp4 can replace the live preview surface (classic VCAM algorithm).
+- * NV21 PreviewCallback overwrite still next (MediaCodec frame provider).
++ * v1.13.0: ArtHook setPreviewTexture / startPreview / setPreviewDisplay + MediaPlayer
++ * v1.15.0: ArtHook setPreviewCallback* + onPreviewFrame NV21 (see nv21_hooks.cpp)
+  */
+ #include <cstdlib>
+ #include <cstring>
+@@ -19,6 +18,7 @@
+ #include "zygisk.hpp"
+ #include <arthook/ArtHook.h>
+ #include <arthook/Hooked.h>
++#include "nv21_hooks.h"
+ 
+ using zygisk::Api;
+ using zygisk::AppSpecializeArgs;
+@@ -73,8 +73,8 @@ static void report_status(const char *pkg, const char *status) {
+ }
+ 
+ static void write_module_version() {
+-    write_text(kModuleVersion, "1.13.0");
+-    write_text(kVersionFile, "1.13.0");
++    write_text(kModuleVersion, "1.15.0");
++    write_text(kVersionFile, "1.15.0");
+ }
+ 
+ class VideoFrameProvider {
+@@ -242,7 +242,7 @@ private:
+ 
+ static VideoFrameProvider g_video;
+ static Api *g_api = nullptr;
+-static char g_last_pkg[256] = {};
++char g_last_pkg[256] = {};
+ 
+ static arthook::Hooked g_hook_setPreviewTexture;
+ static arthook::Hooked g_hook_startPreview;
+@@ -328,6 +328,8 @@ static int install_art_hooks(JNIEnv *env, const char *pkg) {
+     if (st == arthook::Status::kOk) { n++; LOGI("  ART hooked: setPreviewDisplay"); }
+     else LOGW("  setPreviewDisplay: %s", arthook::StatusToString(st));
+ 
++    n += install_preview_callback_hooks(env);
++
+     char buf[64];
+     if (n > 0) snprintf(buf, sizeof(buf), "art_hooked:%d", n);
+     else snprintf(buf, sizeof(buf), "art_hook_none");
+@@ -358,6 +360,7 @@ static void hooked_native_setPreviewDisplay(JNIEnv *env, jobject thiz, jobject s
+     if (orig_native_setPreviewDisplay) orig_native_setPreviewDisplay(env, thiz, surface);
+ }
+ static void hooked_native_setPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
++    if (cb) process_callback(env, thiz, cb, "jni");
+     if (orig_native_setPreviewCallback) orig_native_setPreviewCallback(env, thiz, cb);
+ }
+ static void hooked_native_takePicture(JNIEnv *env, jobject thiz, jobject a, jobject b, jobject c, jobject d) {
