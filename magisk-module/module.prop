@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.14.0
-versionCode=1140
+version=v1.15.0
+versionCode=1150
 author=smithluke874
-description=Pure Magisk + Zygisk VirtualCam (NO LSPosed). ArtHook ART hooks for setPreviewTexture/startPreview/setPreviewCallback* + MediaPlayer surface injection + NV21 callback arm + JNI Camera1 hooks + control plane.
+description=Pure Magisk + Zygisk VirtualCam (NO LSPosed). ArtHook ART hooks for setPreviewTexture/startPreview/setPreviewCallback* + MediaPlayer surface + NV21 onPreviewFrame overwrite + JNI Camera1 hooks + control plane.
