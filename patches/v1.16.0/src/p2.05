@@ -1,4 +1,36 @@
-        "(Landroid/hardware/Camera$PreviewCallback;)V",
-        reinterpret_cast<void*>(&Hooked_setOneShotPreviewCallback)) == arthook::Status::kOk) n++;
-    return n;
+void process_callback(JNIEnv *env, jobject camera, jobject callback, const char *which) {
+    if (!env || !callback) return;
+    LOGI("process_callback %s", which);
+    g_nv21.setVideoPath(kCamera1Video);
+    int w = 0, h = 0;
+    if (camera && read_preview_size(env, camera, &w, &h))
+        g_nv21.ensure(w, h);
+    else
+        g_nv21.ensure(640, 480);
+
+    if (camera) {
+        if (g_tracked_camera) env->DeleteGlobalRef(g_tracked_camera);
+        g_tracked_camera = env->NewGlobalRef(camera);
+    }
+    jclass cbCls = env->GetObjectClass(callback);
+    if (!cbCls) { env->ExceptionClear(); return; }
+    if (g_cb_class) env->DeleteGlobalRef(g_cb_class);
+    g_cb_class = (jclass)env->NewGlobalRef(cbCls);
+    if (!g_hook_onPreviewFrame.installed()) {
+        auto st = g_hook_onPreviewFrame.install(
+            env, g_cb_class, "onPreviewFrame",
+            "([BLandroid/hardware/Camera;)V",
+            reinterpret_cast<void*>(&Hooked_onPreviewFrame));
+        char buf[64];
+        snprintf(buf, sizeof(buf),
+                 st == arthook::Status::kOk ? "nv21_cb_hooked:%s" : "nv21_cb_fail:%s", which);
+        report_status(g_last_pkg, buf);
+    }
+    env->DeleteLocalRef(cbCls);
+}
+
+extern "C" void Hooked_setPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
+    if (cb) process_callback(env, thiz, cb, "cb");
+    if (g_hook_setPreviewCallback.installed())
+        g_hook_setPreviewCallback.invoke<void>(env, thiz, cb);
 }

@@ -1,0 +1,28 @@
+extern "C" void Hooked_setPreviewCallbackWithBuffer(JNIEnv *env, jobject thiz, jobject cb) {
+    if (cb) process_callback(env, thiz, cb, "buf");
+    if (g_hook_setPreviewCallbackWithBuffer.installed())
+        g_hook_setPreviewCallbackWithBuffer.invoke<void>(env, thiz, cb);
+}
+
+extern "C" void Hooked_setOneShotPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
+    if (cb) process_callback(env, thiz, cb, "oneshot");
+    if (g_hook_setOneShotPreviewCallback.installed())
+        g_hook_setOneShotPreviewCallback.invoke<void>(env, thiz, cb);
+}
+
+int install_preview_callback_hooks(JNIEnv *env) {
+    int n = 0;
+    if (g_hook_setPreviewCallback.install(
+            env, "android/hardware/Camera", "setPreviewCallback",
+            "(Landroid/hardware/Camera$PreviewCallback;)V",
+            reinterpret_cast<void*>(&Hooked_setPreviewCallback)) == arthook::Status::kOk)
+        n++;
+    if (g_hook_setPreviewCallbackWithBuffer.install(
+            env, "android/hardware/Camera", "setPreviewCallbackWithBuffer",
+            "(Landroid/hardware/Camera$PreviewCallback;)V",
+            reinterpret_cast<void*>(&Hooked_setPreviewCallbackWithBuffer)) == arthook::Status::kOk)
+        n++;
+    if (g_hook_setOneShotPreviewCallback.install(
+            env, "android/hardware/Camera", "setOneShotPreviewCallback",
+            "(Landroid/hardware/Camera$PreviewCallback;)V",
+            reinterpret_cast<void*>(&Hooked_setOneShotPreviewCallback)) == arthook::Status::kOk)

@@ -1,23 +1,38 @@
-    env->DeleteLocalRef(cbCls);
+    jmethodID getSize = env->GetMethodID(pCls, "getPreviewSize",
+        "()Landroid/hardware/Camera$Size;");
+    if (!getSize) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(pCls);
+        env->DeleteLocalRef(params);
+        return false;
+    }
+    jobject sizeObj = env->CallObjectMethod(params, getSize);
+    env->DeleteLocalRef(pCls);
+    env->DeleteLocalRef(params);
+    if (!sizeObj || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    jclass sizeCls = env->GetObjectClass(sizeObj);
+    jfieldID wf = env->GetFieldID(sizeCls, "width", "I");
+    jfieldID hf = env->GetFieldID(sizeCls, "height", "I");
+    if (wf && hf) {
+        *ow = env->GetIntField(sizeObj, wf);
+        *oh = env->GetIntField(sizeObj, hf);
+    }
+    env->DeleteLocalRef(sizeCls);
+    env->DeleteLocalRef(sizeObj);
+    return *ow > 0 && *oh > 0;
 }
-extern "C" void Hooked_setPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
-    if (cb) process_callback(env, thiz, cb, "cb");
-    if (g_hook_setPreviewCallback.installed()) g_hook_setPreviewCallback.invoke<void>(env, thiz, cb);
+
+extern "C" void Hooked_onPreviewFrame(JNIEnv *env, jobject thiz, jbyteArray data, jobject camera) {
+    if (data && g_nv21.isReady()) {
+        g_nv21.copyInto(env, data);
+        if ((g_nv21.frames() % 30) == 1) {
+            char buf[96];
+            snprintf(buf, sizeof(buf),
+                     g_nv21.isVideo() ? "nv21_video:%dx%d#%d" : "nv21_pattern:%dx%d#%d",
+                     g_nv21.width(), g_nv21.height(), g_nv21.frames());
+            report_status(g_last_pkg, buf);
+        }
+    }
+    if (g_hook_onPreviewFrame.installed())
+        g_hook_onPreviewFrame.invoke<void>(env, thiz, data, camera);
 }
-extern "C" void Hooked_setPreviewCallbackWithBuffer(JNIEnv *env, jobject thiz, jobject cb) {
-    if (cb) process_callback(env, thiz, cb, "buf");
-    if (g_hook_setPreviewCallbackWithBuffer.installed()) g_hook_setPreviewCallbackWithBuffer.invoke<void>(env, thiz, cb);
-}
-extern "C" void Hooked_setOneShotPreviewCallback(JNIEnv *env, jobject thiz, jobject cb) {
-    if (cb) process_callback(env, thiz, cb, "oneshot");
-    if (g_hook_setOneShotPreviewCallback.installed()) g_hook_setOneShotPreviewCallback.invoke<void>(env, thiz, cb);
-}
-int install_preview_callback_hooks(JNIEnv *env) {
-    int n = 0;
-    if (g_hook_setPreviewCallback.install(env, "android/hardware/Camera", "setPreviewCallback",
-        "(Landroid/hardware/Camera$PreviewCallback;)V",
-        reinterpret_cast<void*>(&Hooked_setPreviewCallback)) == arthook::Status::kOk) n++;
-    if (g_hook_setPreviewCallbackWithBuffer.install(env, "android/hardware/Camera", "setPreviewCallbackWithBuffer",
-        "(Landroid/hardware/Camera$PreviewCallback;)V",
-        reinterpret_cast<void*>(&Hooked_setPreviewCallbackWithBuffer)) == arthook::Status::kOk) n++;
-    if (g_hook_setOneShotPreviewCallback.install(env, "android/hardware/Camera", "setOneShotPreviewCallback",

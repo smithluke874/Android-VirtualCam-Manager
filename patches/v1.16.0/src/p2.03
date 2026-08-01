@@ -1,31 +1,35 @@
-            char buf[96];
-            snprintf(buf, sizeof(buf), g_nv21.isVideo() ? "nv21_video:%dx%d#%d" : "nv21_pattern:%dx%d#%d",
-                     g_nv21.width(), g_nv21.height(), g_nv21.frames());
-            report_status(g_last_pkg, buf);
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
+                int32_t s = 0;
+                if (AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_STRIDE, &s) && s > 0)
+                    stride = s;
+                AMediaFormat_delete(nf);
+                LOGI("decoder: format changed cf=%d %dx%d stride=%d", colorFormat, srcW, srcH, stride);
+            }
+        } else if (outIdx != AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
+            if (++errs > 60) {
+                LOGW("decoder: too many errors, exiting");
+                break;
+            }
         }
     }
-    if (g_hook_onPreviewFrame.installed())
-        g_hook_onPreviewFrame.invoke<void>(env, thiz, data, camera);
+
+    AMediaCodec_stop(codec);
+    AMediaCodec_delete(codec);
+    AMediaExtractor_delete(ex);
+    video_mode_ = false;
+    decoder_running_ = false;
+    LOGI("decoder exited after %d frames", frames);
 }
-void process_callback(JNIEnv *env, jobject camera, jobject callback, const char *which) {
-    if (!env || !callback) return;
-    LOGI("process_callback %s", which);
-    g_nv21.setVideoPath(kCamera1Video);
-    int w = 0, h = 0;
-    if (camera && read_preview_size(env, camera, &w, &h)) g_nv21.ensure(w, h);
-    else g_nv21.ensure(640, 480);
-    if (camera) {
-        if (g_tracked_camera) env->DeleteGlobalRef(g_tracked_camera);
-        g_tracked_camera = env->NewGlobalRef(camera);
-    }
-    jclass cbCls = env->GetObjectClass(callback);
-    if (!cbCls) { env->ExceptionClear(); return; }
-    if (g_cb_class) env->DeleteGlobalRef(g_cb_class);
-    g_cb_class = (jclass)env->NewGlobalRef(cbCls);
-    if (!g_hook_onPreviewFrame.installed()) {
-        auto st = g_hook_onPreviewFrame.install(env, g_cb_class, "onPreviewFrame",
-            "([BLandroid/hardware/Camera;)V", reinterpret_cast<void*>(&Hooked_onPreviewFrame));
-        char buf[64];
-        snprintf(buf, sizeof(buf), st == arthook::Status::kOk ? "nv21_cb_hooked:%s" : "nv21_cb_fail:%s", which);
-        report_status(g_last_pkg, buf);
-    }
+
+static bool read_preview_size(JNIEnv *env, jobject camera, int *ow, int *oh) {
+    *ow = 0; *oh = 0;
+    if (!env || !camera) return false;
+    jclass camCls = env->GetObjectClass(camera);
+    if (!camCls) { env->ExceptionClear(); return false; }
+    jmethodID getParams = env->GetMethodID(camCls, "getParameters",
+        "()Landroid/hardware/Camera$Parameters;");
+    if (!getParams) { env->ExceptionClear(); env->DeleteLocalRef(camCls); return false; }
+    jobject params = env->CallObjectMethod(camera, getParams);
+    env->DeleteLocalRef(camCls);
+    if (!params || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    jclass pCls = env->GetObjectClass(params);
