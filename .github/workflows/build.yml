@@ -12,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Assemble staged sources (HomeScreen + MediaCodec)
+      - name: Assemble staged sources (HomeScreen + legacy)
         run: |
           if [ -f patches/v1.16.0/assemble.sh ]; then
             chmod +x patches/v1.16.0/assemble.sh
-            bash patches/v1.16.0/assemble.sh || true
+            bash patches/v1.16.0/assemble.sh || echo 'v1 assemble skipped (v2 GL path is primary)'
           fi
 
       - name: Set up JDK 17
@@ -65,7 +65,7 @@ jobs:
           if-no-files-found: error
 
   build-magisk:
-    name: Package Magisk Module (+ Zygisk ArtHook)
+    name: Package Magisk Module (+ Zygisk GL v2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,33 +84,29 @@ jobs:
           curl -fsSL -o zygisk-native/jni/zygisk.hpp \
             https://raw.githubusercontent.com/topjohnwu/zygisk-module-sample/master/module/jni/zygisk.hpp
 
-      - name: Fetch ArtHook sources
+      - name: Fetch ShadowHook (optional inline hook engine)
         run: |
-          mkdir -p zygisk-native/third_party
-          rm -rf zygisk-native/third_party/arthook
-          git clone --depth 1 https://github.com/aimardcr/ArtHook.git zygisk-native/third_party/arthook
-          rm -rf zygisk-native/third_party/arthook/.git \
-                 zygisk-native/third_party/arthook/tests \
-                 zygisk-native/third_party/arthook/examples
-          test -f zygisk-native/third_party/arthook/include/arthook/ArtHook.h
-
-      - name: Assemble MediaCodec sources (v1.16.0)
-        run: |
-          if [ -f patches/v1.16.0/assemble.sh ]; then
-            chmod +x patches/v1.16.0/assemble.sh
-            bash patches/v1.16.0/assemble.sh
+          mkdir -p zygisk-native/third_party/shadowhook/include
+          git clone --depth 1 https://github.com/bytedance/android-inline-hook.git /tmp/shadowhook-src || true
+          if [ -f /tmp/shadowhook-src/shadowhook/src/main/cpp/include/shadowhook.h ]; then
+            cp /tmp/shadowhook-src/shadowhook/src/main/cpp/include/shadowhook.h \
+               zygisk-native/third_party/shadowhook/include/shadowhook.h
+            echo "ShadowHook header installed"
+          else
+            echo "WARN: ShadowHook header not fetched — scaffold build without VCAM_HAS_SHADOWHOOK"
           fi
 
-      - name: Verify NV21 wiring
+      - name: Verify v2 GL native sources
         run: |
-          grep -n install_preview_callback_hooks zygisk-native/jni/main.cpp
-          grep -n nv21_hooks.h zygisk-native/jni/main.cpp
-          grep -n process_callback zygisk-native/jni/main.cpp
-          grep -n NdkMediaCodec zygisk-native/jni/nv21_hooks.cpp || echo "MediaCodec not yet in tree (pattern mode)"
-          grep -n mediandk zygisk-native/CMakeLists.txt || true
-          grep -n '1\.16\.0' zygisk-native/jni/main.cpp || true
+          test -f zygisk-native/jni/main.cpp
+          test -f zygisk-native/jni/gl_hooks.cpp
+          test -f zygisk-native/jni/gl_hooks.h
+          grep -n 'glBindTexture\|install_gl_hooks\|2\.0\.0' zygisk-native/jni/main.cpp || true
+          grep -n 'NdkMediaCodec\|hooked_glBindTexture\|GL_TEXTURE_EXTERNAL' zygisk-native/jni/gl_hooks.cpp || true
+          grep -n 'max-page-size=16384\|GLESv2\|mediandk' zygisk-native/CMakeLists.txt
+          grep -n '2\.0\.0' magisk-module/module.prop
 
-      - name: Build Zygisk native with CMake + ArtHook
+      - name: Build Zygisk native with CMake (GL + MediaCodec)
         if: steps.setup-ndk.outcome == 'success'
         working-directory: zygisk-native
         run: |
@@ -143,16 +139,16 @@ jobs:
           done
           ls -la ../magisk-module/zygisk/ || true
 
-      - name: Package Magisk zip
+      - name: Package Magisk zip (v2.0.0-dev)
         run: |
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v1.16.0.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v1.16.0.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v1.16.0.zip
+          zip -r ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v1.16.0
-          path: VirtualCam-Manager-Magisk-v1.16.0.zip
+          name: VirtualCam-Manager-Magisk-v2.0.0-dev
+          path: VirtualCam-Manager-Magisk-v2.0.0-dev.zip
           if-no-files-found: error
