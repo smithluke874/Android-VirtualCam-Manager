@@ -1,7 +1,7 @@
 # Original android_virtual_cam algorithm (from HookMain.java)
 
 Source: https://github.com/w2016561536/android_virtual_cam  
-We reimplement this under **pure Magisk Zygisk + LSPlant** (no LSPosed manager).
+We reimplement this under **pure Magisk Zygisk + LSPlant / ArtHook** (no LSPosed manager).
 
 ## Control files (same paths we already automate)
 
@@ -45,15 +45,15 @@ Replace JPEG/YUV result with a still derived from the video (or `1000.bmp` in so
 4. `ImageReader` path: decode video frames into NV21/JPEG for readers
 5. Session callbacks (`onConfigured`, etc.) rewired to virtual surfaces
 
-## Why pure Zygisk needs LSPlant
+## Why pure Zygisk needs ART hooks
 
 Original code uses Xposed `findAndHookMethod` on **Java** methods.  
 Zygisk alone can:
 - gate processes (done)
 - PLT/JNI-native hook (limited for Camera Java API)
 
-**LSPlant** provides ART Java method hooking without installing LSPosed.  
-We init LSPlant inside our Zygisk `.so` and hook the same targets listed above.
+**LSPlant** or **ArtHook** provides ART Java method hooking without installing LSPosed.  
+We init ArtHook / LSPlant inside our Zygisk `.so` and hook the same targets listed above.
 
 ## Port status in this project
 
@@ -62,6 +62,6 @@ We init LSPlant inside our Zygisk `.so` and hook the same targets listed above.
 | Paths + flags + APK automation | Done |
 | Zygisk process gate + status | Done |
 | Compiled Zygisk `.so` in Magisk zip | Done (CI) |
-| MediaPlayer surface replacement | Blueprint (needs LSPlant) |
-| NV21 callback injection | Blueprint (needs LSPlant + VideoToFrames) |
+| MediaPlayer surface replacement | Partial (v1.12.0 JNI native attempt on setPreviewDisplay/startPreview) |
+| NV21 callback injection | Blueprint (needs ART hook + VideoToFrames) |
 | Camera2 surface redirect | Blueprint |
