@@ -12,8 +12,8 @@ android {
         applicationId = "com.virtualcam.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2003
-        versionName = "2.0.1-dev"
+        versionCode = 2004
+        versionName = "2.0.2-dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
