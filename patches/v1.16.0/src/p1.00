@@ -1,0 +1,38 @@
+/*
+ * NV21 PreviewCallback path v1.16.0
+ * MediaCodec continuous video→NV21 + patterned fallback
+ */
+#include "nv21_hooks.h"
+#include <cstdio>
+#include <cstdlib>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <media/NdkMediaCodec.h>
+#include <media/NdkMediaExtractor.h>
+#include <media/NdkMediaFormat.h>
+#include <arthook/ArtHook.h>
+
+#define LOG_TAG "VirtualCamZygisk"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+static constexpr const char *kHookStatus = "/data/adb/virtualcam/hook_status";
+static constexpr const char *kLastPkg = "/data/adb/virtualcam/last_hook_pkg";
+static constexpr const char *kCamera1Video = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+
+Nv21FrameProvider g_nv21;
+static arthook::Hooked g_hook_setPreviewCallback, g_hook_setPreviewCallbackWithBuffer;
+static arthook::Hooked g_hook_setOneShotPreviewCallback, g_hook_onPreviewFrame;
+static jobject g_tracked_camera = nullptr;
+static jclass g_cb_class = nullptr;
+
+static void report_status(const char *pkg, const char *status) {
+    FILE *f = fopen(kHookStatus, "w");
+    if (f) { fputs(status, f); fclose(f); }
+    f = fopen(kLastPkg, "w");
+    if (f) { fputs(pkg, f); fclose(f); }
+}
+static bool file_exists(const char *path) {
+    struct stat st{};

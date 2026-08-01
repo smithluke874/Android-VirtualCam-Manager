@@ -1,0 +1,34 @@
+        buf_.assign(need, 0);
+        decode_buf_.assign(need, 0);
+        w_ = w; h_ = h; bar_x_ = 0;
+    }
+    if (!video_path_.empty() && file_exists(video_path_.c_str())) {
+        if (!decoder_running_ || changed) {
+            stopDecoderLocked();
+            if (startDecoderLocked()) {
+                video_mode_ = true; ready_ = true;
+                LOGI("Nv21: video mode %dx%d", w, h);
+                return true;
+            }
+            LOGW("Nv21: decoder failed — pattern fallback");
+        } else { video_mode_ = true; ready_ = true; return true; }
+    }
+    video_mode_ = false; fillPatternLocked(); ready_ = true; return true;
+}
+bool Nv21FrameProvider::copyInto(JNIEnv *env, jbyteArray arr) {
+    if (!env || !arr || !ready_) return false;
+    std::lock_guard<std::mutex> lock(mu_);
+    if (buf_.empty()) return false;
+    jsize len = env->GetArrayLength(arr);
+    if (len <= 0) return false;
+    jsize n = (jsize)(buf_.size() < (size_t)len ? buf_.size() : (size_t)len);
+    env->SetByteArrayRegion(arr, 0, n, reinterpret_cast<const jbyte*>(buf_.data()));
+    frame_count_++;
+    if (!video_mode_.load() && (frame_count_ % 3) == 0) {
+        bar_x_ = (bar_x_ + 8) % (w_ > 0 ? w_ : 1);
+        fillPatternLocked();
+    }
+    return true;
+}
+void Nv21FrameProvider::convertToNv21(const uint8_t *src, int srcW, int srcH, int srcStride,
+                                      int colorFormat, uint8_t *dst, int dstW, int dstH) {
