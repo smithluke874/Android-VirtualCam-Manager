@@ -84,16 +84,23 @@ jobs:
           curl -fsSL -o zygisk-native/jni/zygisk.hpp \
             https://raw.githubusercontent.com/topjohnwu/zygisk-module-sample/master/module/jni/zygisk.hpp
 
-      - name: Fetch ShadowHook (optional inline hook engine)
+      - name: Fetch ShadowHook runtime libs (optional)
         run: |
-          mkdir -p zygisk-native/third_party/shadowhook/include
-          git clone --depth 1 https://github.com/bytedance/android-inline-hook.git /tmp/shadowhook-src || true
-          if [ -f /tmp/shadowhook-src/shadowhook/src/main/cpp/include/shadowhook.h ]; then
-            cp /tmp/shadowhook-src/shadowhook/src/main/cpp/include/shadowhook.h \
-               zygisk-native/third_party/shadowhook/include/shadowhook.h
-            echo "ShadowHook header installed"
+          mkdir -p /tmp/sh-aar magisk-module/libs
+          # Try Maven Central AAR for prebuilt native libs
+          VER=1.0.10
+          URL="https://repo1.maven.org/maven2/com/bytedance/android/shadowhook/${VER}/shadowhook-${VER}.aar"
+          if curl -fsSL -o /tmp/sh-aar/sh.aar "$URL"; then
+            cd /tmp/sh-aar && unzip -oq sh.aar
+            for ABI in arm64-v8a armeabi-v7a x86_64; do
+              if [ -f jni/$ABI/libshadowhook.so ]; then
+                mkdir -p $GITHUB_WORKSPACE/magisk-module/libs/$ABI
+                cp jni/$ABI/libshadowhook.so $GITHUB_WORKSPACE/magisk-module/libs/$ABI/
+                echo "ShadowHook $ABI $(stat -c%s jni/$ABI/libshadowhook.so) bytes"
+              fi
+            done
           else
-            echo "WARN: ShadowHook header not fetched — scaffold build without VCAM_HAS_SHADOWHOOK"
+            echo "WARN: could not download ShadowHook AAR — hooks will report pending"
           fi
 
       - name: Verify v2 GL native sources
@@ -101,8 +108,8 @@ jobs:
           test -f zygisk-native/jni/main.cpp
           test -f zygisk-native/jni/gl_hooks.cpp
           test -f zygisk-native/jni/gl_hooks.h
-          grep -n 'glBindTexture\|install_gl_hooks\|2\.0\.0' zygisk-native/jni/main.cpp || true
-          grep -n 'NdkMediaCodec\|hooked_glBindTexture\|GL_TEXTURE_EXTERNAL' zygisk-native/jni/gl_hooks.cpp || true
+          grep -n 'install_gl_hooks\|2\.0\.0' zygisk-native/jni/main.cpp
+          grep -n 'yuv420sp_to_rgb\|ensure_upload_texture\|load_shadowhook\|hooked_glDrawElements\|fill_test_pattern' zygisk-native/jni/gl_hooks.cpp
           grep -n 'max-page-size=16384\|GLESv2\|mediandk' zygisk-native/CMakeLists.txt
           grep -n '2\.0\.0' magisk-module/module.prop
 
@@ -141,10 +148,14 @@ jobs:
 
       - name: Package Magisk zip (v2.0.0-dev)
         run: |
+          # Place primary ABI shadowhook next to module for dlopen fallback
+          if [ -f magisk-module/libs/arm64-v8a/libshadowhook.so ]; then
+            cp magisk-module/libs/arm64-v8a/libshadowhook.so magisk-module/libshadowhook.so
+          fi
           cd magisk-module
           zip -r ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip .
           ls -la ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip | head -40
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
