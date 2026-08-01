@@ -1,6 +1,13 @@
 /*
  * NV21 PreviewCallback path v1.16.0
  * MediaCodec continuous video→NV21 + patterned fallback
+ *
+ * Improvements:
+ *  - Multi-path video discovery (DCIM + control-plane)
+ *  - Stride-aware conversion when format reports it
+ *  - Clean looping (seek on EOS, no permanent EOS flag)
+ *  - ~30 fps pacing to reduce CPU
+ *  - Clearer status reporting
  */
 #include "nv21_hooks.h"
 #include <cstdio>
@@ -19,20 +26,11 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static constexpr const char *kHookStatus = "/data/adb/virtualcam/hook_status";
-static constexpr const char *kLastPkg = "/data/adb/virtualcam/last_hook_pkg";
+static constexpr const char *kLastPkg    = "/data/adb/virtualcam/last_hook_pkg";
 static constexpr const char *kCamera1Video = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+static constexpr const char *kAdbVideo     = "/data/adb/virtualcam/virtual.mp4";
 
 Nv21FrameProvider g_nv21;
 static arthook::Hooked g_hook_setPreviewCallback, g_hook_setPreviewCallbackWithBuffer;
 static arthook::Hooked g_hook_setOneShotPreviewCallback, g_hook_onPreviewFrame;
 static jobject g_tracked_camera = nullptr;
-static jclass g_cb_class = nullptr;
-
-static void report_status(const char *pkg, const char *status) {
-    FILE *f = fopen(kHookStatus, "w");
-    if (f) { fputs(status, f); fclose(f); }
-    f = fopen(kLastPkg, "w");
-    if (f) { fputs(pkg, f); fclose(f); }
-}
-static bool file_exists(const char *path) {
-    struct stat st{};

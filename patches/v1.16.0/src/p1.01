@@ -1,42 +1,47 @@
-    return path && stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+static jclass  g_cb_class = nullptr;
+
+static void report_status(const char *pkg, const char *status) {
+    FILE *f = fopen(kHookStatus, "w");
+    if (f) { fputs(status, f); fclose(f); }
+    f = fopen(kLastPkg, "w");
+    if (f) { fputs(pkg ? pkg : "", f); fclose(f); }
+}
+
+static bool file_exists(const char *path) {
+    struct stat st{};
+    return path && path[0] && stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+}
+
+static const char *resolve_video_path(const char *preferred) {
+    if (preferred && file_exists(preferred)) return preferred;
+    if (file_exists(kCamera1Video)) return kCamera1Video;
+    if (file_exists(kAdbVideo)) return kAdbVideo;
+    return nullptr;
 }
 
 void Nv21FrameProvider::setVideoPath(const char *path) {
     std::lock_guard<std::mutex> lock(mu_);
     video_path_ = path ? path : "";
 }
+
 void Nv21FrameProvider::stop() {
     std::lock_guard<std::mutex> lock(mu_);
     stopDecoderLocked();
     video_mode_ = false;
     ready_ = false;
 }
+
 void Nv21FrameProvider::stopDecoderLocked() {
     stop_flag_ = true;
-    if (decoder_thread_.joinable()) decoder_thread_.detach();
+    if (decoder_thread_.joinable()) {
+        // Detach is intentional: Zygisk process may be dying; join can hang.
+        decoder_thread_.detach();
+    }
     decoder_running_ = false;
     stop_flag_ = false;
 }
+
 bool Nv21FrameProvider::startDecoderLocked() {
     if (video_path_.empty() || w_ <= 0 || h_ <= 0) return false;
     stop_flag_ = false;
     decoder_running_ = true;
-    decoder_thread_ = std::thread([this]{ decoderLoop(); });
-    return true;
-}
-void Nv21FrameProvider::fillPatternLocked() {
-    if (buf_.empty() || w_ <= 0 || h_ <= 0) return;
-    size_t ySize = (size_t)w_ * h_;
-    memset(buf_.data(), 0x80, ySize);
-    int barW = w_ / 16; if (barW < 4) barW = 4;
-    for (int y = 0; y < h_; y++)
-        for (int x = bar_x_; x < bar_x_ + barW && x < w_; x++)
-            buf_[(size_t)y * w_ + x] = 0xE0;
-    memset(buf_.data() + ySize, 0x80, buf_.size() - ySize);
-}
-bool Nv21FrameProvider::ensure(int w, int h) {
-    if (w <= 0 || h <= 0) return false;
-    std::lock_guard<std::mutex> lock(mu_);
-    size_t need = (size_t)w * h * 3 / 2;
-    bool changed = (w_ != w || h_ != h || buf_.size() != need);
-    if (changed) {

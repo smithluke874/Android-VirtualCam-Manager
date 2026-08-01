@@ -1,28 +1,37 @@
-        LOGE("decoder: video missing"); video_mode_ = false; decoder_running_ = false; return;
-    }
-    AMediaExtractor *ex = AMediaExtractor_new();
-    if (!ex || AMediaExtractor_setDataSource(ex, path.c_str()) != AMEDIA_OK) {
-        LOGE("decoder: extractor fail"); if (ex) AMediaExtractor_delete(ex);
-        video_mode_ = false; decoder_running_ = false; return;
-    }
-    int track = -1; AMediaFormat *fmt = nullptr; const char *mime = nullptr;
-    int32_t srcW = 0, srcH = 0;
-    for (int i = 0; i < AMediaExtractor_getTrackCount(ex); i++) {
-        AMediaFormat *f = AMediaExtractor_getTrackFormat(ex, i);
-        if (AMediaFormat_getString(f, AMEDIAFORMAT_KEY_MIME, &mime) && mime && strncmp(mime, "video/", 6) == 0) {
-            track = i; fmt = f; break;
+    bool semi = (colorFormat == 21 || colorFormat == 0x7F420888 ||
+                 colorFormat == 0x7F000789 || colorFormat == 0x7FA30C04);
+
+    // Y plane (nearest-neighbor scale)
+    for (int dy = 0; dy < dstH; dy++) {
+        int sy = dy * srcH / dstH;
+        if (sy >= srcH) sy = srcH - 1;
+        const uint8_t *row = src + (size_t)sy * (size_t)srcStride;
+        uint8_t *drow = dst + (size_t)dy * (size_t)dstW;
+        for (int dx = 0; dx < dstW; dx++) {
+            int sx = dx * srcW / dstW;
+            if (sx >= srcW) sx = srcW - 1;
+            drow[dx] = row[sx];
         }
-        AMediaFormat_delete(f);
     }
-    if (track < 0 || !fmt) {
-        LOGE("decoder: no video track"); AMediaExtractor_delete(ex);
-        video_mode_ = false; decoder_running_ = false; return;
-    }
-    AMediaExtractor_selectTrack(ex, track);
-    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, &srcW);
-    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
-    AMediaCodec *codec = AMediaCodec_createDecoderByType(mime);
-    if (!codec || AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
-        LOGE("decoder: codec fail");
-        if (codec) AMediaCodec_delete(codec);
+
+    // UV plane → NV21 (VU interleaved)
+    uint8_t *dstUV = dst + (size_t)dstW * (size_t)dstH;
+    int srcUVH = srcH / 2;
+    int srcUVW = srcW / 2;
+    int dstUVH = dstH / 2;
+    int dstUVW = dstW / 2;
+
+    for (int dy = 0; dy < dstUVH; dy++) {
+        int sy = dy * srcUVH / (dstUVH > 0 ? dstUVH : 1);
+        if (sy >= srcUVH) sy = srcUVH - 1;
+        for (int dx = 0; dx < dstUVW; dx++) {
+            int sx = dx * srcUVW / (dstUVW > 0 ? dstUVW : 1);
+            if (sx >= srcUVW) sx = srcUVW - 1;
+            uint8_t u = 0x80, v = 0x80;
+            if (semi) {
+                // NV12-style: UVUV after Y
+                const uint8_t *uv = src + (size_t)srcStride * (size_t)srcH
+                                 + (size_t)sy * (size_t)srcStride + (size_t)sx * 2;
+                u = uv[0];
+                v = uv[1];
+            } else {

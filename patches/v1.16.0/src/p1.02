@@ -1,34 +1,38 @@
+    decoder_thread_ = std::thread([this]{ decoderLoop(); });
+    return true;
+}
+
+void Nv21FrameProvider::fillPatternLocked() {
+    if (buf_.empty() || w_ <= 0 || h_ <= 0) return;
+    size_t ySize = (size_t)w_ * (size_t)h_;
+    memset(buf_.data(), 0x80, ySize);
+    int barW = w_ / 16; if (barW < 4) barW = 4;
+    for (int y = 0; y < h_; y++)
+        for (int x = bar_x_; x < bar_x_ + barW && x < w_; x++)
+            buf_[(size_t)y * (size_t)w_ + (size_t)x] = (uint8_t)0xE0;
+    memset(buf_.data() + ySize, 0x80, buf_.size() - ySize);
+}
+
+bool Nv21FrameProvider::ensure(int w, int h) {
+    if (w <= 0 || h <= 0) return false;
+    std::lock_guard<std::mutex> lock(mu_);
+    size_t need = (size_t)w * (size_t)h * 3 / 2;
+    bool changed = (w_ != w || h_ != h || buf_.size() != need);
+    if (changed) {
         buf_.assign(need, 0);
         decode_buf_.assign(need, 0);
         w_ = w; h_ = h; bar_x_ = 0;
     }
-    if (!video_path_.empty() && file_exists(video_path_.c_str())) {
+
+    const char *resolved = resolve_video_path(video_path_.c_str());
+    if (resolved) {
+        if (video_path_ != resolved) video_path_ = resolved;
         if (!decoder_running_ || changed) {
             stopDecoderLocked();
             if (startDecoderLocked()) {
-                video_mode_ = true; ready_ = true;
-                LOGI("Nv21: video mode %dx%d", w, h);
+                video_mode_ = true;
+                ready_ = true;
+                LOGI("Nv21: video mode %dx%d path=%s", w, h, resolved);
+                report_status(g_last_pkg, "nv21_decoder_start");
                 return true;
             }
-            LOGW("Nv21: decoder failed — pattern fallback");
-        } else { video_mode_ = true; ready_ = true; return true; }
-    }
-    video_mode_ = false; fillPatternLocked(); ready_ = true; return true;
-}
-bool Nv21FrameProvider::copyInto(JNIEnv *env, jbyteArray arr) {
-    if (!env || !arr || !ready_) return false;
-    std::lock_guard<std::mutex> lock(mu_);
-    if (buf_.empty()) return false;
-    jsize len = env->GetArrayLength(arr);
-    if (len <= 0) return false;
-    jsize n = (jsize)(buf_.size() < (size_t)len ? buf_.size() : (size_t)len);
-    env->SetByteArrayRegion(arr, 0, n, reinterpret_cast<const jbyte*>(buf_.data()));
-    frame_count_++;
-    if (!video_mode_.load() && (frame_count_ % 3) == 0) {
-        bar_x_ = (bar_x_ + 8) % (w_ > 0 ? w_ : 1);
-        fillPatternLocked();
-    }
-    return true;
-}
-void Nv21FrameProvider::convertToNv21(const uint8_t *src, int srcW, int srcH, int srcStride,
-                                      int colorFormat, uint8_t *dst, int dstW, int dstH) {
