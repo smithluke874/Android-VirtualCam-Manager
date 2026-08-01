@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v1.16.0
-versionCode=1160
+version=v2.0.0-dev
+versionCode=2000
 author=smithluke874
-description=Pure Magisk + Zygisk VirtualCam (NO LSPosed). ArtHook ART hooks for setPreviewTexture/startPreview/setPreviewCallback* + MediaPlayer surface + MediaCodec continuous video→NV21 + patterned fallback + JNI Camera1 hooks + control plane.
+description=Pure Magisk + Zygisk VirtualCam (NO LSPosed). v2 native OpenGL/EGL interception + AMediaCodec. Device verification required before claiming full camera spoof.
