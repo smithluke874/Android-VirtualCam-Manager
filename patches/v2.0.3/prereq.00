@@ -1,0 +1,36 @@
+package com.virtualcam.manager.data
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+data class PrerequisiteStatus(
+    val rootAvailable: Boolean = false,
+    val magiskPresent: Boolean = false,
+    val moduleInstalled: Boolean = false,
+    val camera1Ready: Boolean = false,
+    val moduleControlDir: Boolean = false,
+    val moduleVersion: String? = null,
+    val zygiskLibPresent: Boolean = false,
+    val hookStatus: String? = null,
+    val lastHookPkg: String? = null,
+    val vcamEnabled: Boolean = false,
+    val hasVirtualVideo: Boolean = false,
+    val decoderFrames: Int = 0,
+    val textureId: Long = 0,
+    val bindHits: Int = 0,
+    val pathMode: String? = null,
+    val diag: String? = null,
+    val lastError: String? = null,
+    val capabilities: String? = null
+) {
+    val allPassed: Boolean
+        get() = rootAvailable && magiskPresent && camera1Ready
+}
+
+class PrerequisiteChecker(
+    private val fileSystem: FileSystemRepository = FileSystemRepository()
+) {
+
+    suspend fun check(): PrerequisiteStatus = withContext(Dispatchers.IO) {
+        val root = RootShell.isRootAvailable()
+        val magisk = RootShell.exec("[ -d /data/adb/magisk ] && ec
