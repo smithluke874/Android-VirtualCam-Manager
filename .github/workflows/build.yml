@@ -58,7 +58,7 @@ jobs:
           if-no-files-found: error
 
   build-magisk:
-    name: Package Magisk Module (+ Zygisk if NDK available)
+    name: Package Magisk Module (+ Zygisk ArtHook)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,31 +77,49 @@ jobs:
           curl -fsSL -o zygisk-native/jni/zygisk.hpp \
             https://raw.githubusercontent.com/topjohnwu/zygisk-module-sample/master/module/jni/zygisk.hpp
 
-      - name: Build Zygisk native (optional)
+      - name: Build Zygisk native with CMake + ArtHook
         if: steps.setup-ndk.outcome == 'success'
         working-directory: zygisk-native
         run: |
           export NDK=${{ steps.setup-ndk.outputs.ndk-path }}
-          $NDK/ndk-build -j$(nproc) || echo "ndk-build failed — packaging module without .so"
           mkdir -p ../magisk-module/zygisk
-          if [ -f libs/arm64-v8a/libvirtualcam.so ]; then
-            cp libs/arm64-v8a/libvirtualcam.so   ../magisk-module/zygisk/arm64-v8a.so
-            cp libs/armeabi-v7a/libvirtualcam.so ../magisk-module/zygisk/armeabi-v7a.so 2>/dev/null || true
-            cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so 2>/dev/null || true
-            echo "Zygisk .so packaged"
-            ls -la ../magisk-module/zygisk/
-          fi
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            echo "=== Building $ABI ==="
+            BUILD_DIR=build-$ABI
+            cmake -B $BUILD_DIR \
+              -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=$ABI \
+              -DANDROID_PLATFORM=android-26 \
+              -DANDROID_STL=c++_static \
+              -DCMAKE_BUILD_TYPE=Release \
+              || { echo "cmake configure failed for $ABI"; continue; }
+            cmake --build $BUILD_DIR -j$(nproc) \
+              || { echo "cmake build failed for $ABI"; continue; }
+            SO=$(find $BUILD_DIR -name "libvirtualcam.so" | head -1)
+            if [ -n "$SO" ] && [ -f "$SO" ]; then
+              case $ABI in
+                arm64-v8a)   OUT=arm64-v8a.so ;;
+                armeabi-v7a) OUT=armeabi-v7a.so ;;
+                x86_64)      OUT=x86_64.so ;;
+              esac
+              cp "$SO" ../magisk-module/zygisk/$OUT
+              echo "Packaged $OUT ($(stat -c%s ../magisk-module/zygisk/$OUT) bytes)"
+            else
+              echo "No libvirtualcam.so for $ABI"
+            fi
+          done
+          ls -la ../magisk-module/zygisk/ || true
 
       - name: Package Magisk zip
         run: |
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v1.12.0.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v1.12.0.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v1.12.0.zip
+          zip -r ../VirtualCam-Manager-Magisk-v1.13.0.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v1.13.0.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v1.13.0.zip
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v1.12.0
-          path: VirtualCam-Manager-Magisk-v1.12.0.zip
+          name: VirtualCam-Manager-Magisk-v1.13.0
+          path: VirtualCam-Manager-Magisk-v1.13.0.zip
           if-no-files-found: error
