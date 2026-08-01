@@ -87,7 +87,6 @@ jobs:
       - name: Fetch ShadowHook runtime libs (optional)
         run: |
           mkdir -p /tmp/sh-aar magisk-module/libs
-          # Try Maven Central AAR for prebuilt native libs
           VER=1.0.10
           URL="https://repo1.maven.org/maven2/com/bytedance/android/shadowhook/${VER}/shadowhook-${VER}.aar"
           if curl -fsSL -o /tmp/sh-aar/sh.aar "$URL"; then
@@ -108,10 +107,10 @@ jobs:
           test -f zygisk-native/jni/main.cpp
           test -f zygisk-native/jni/gl_hooks.cpp
           test -f zygisk-native/jni/gl_hooks.h
-          grep -n 'install_gl_hooks\|2\.0\.0' zygisk-native/jni/main.cpp
-          grep -n 'yuv420sp_to_rgb\|ensure_upload_texture\|load_shadowhook\|hooked_glDrawElements\|fill_test_pattern' zygisk-native/jni/gl_hooks.cpp
+          grep -n 'install_gl_hooks\|2\.0' zygisk-native/jni/main.cpp
+          grep -n 'yuv420sp_to_rgb\|ensure_upload_texture\|load_shadowhook\|hooked_glDrawElements\|fill_test_pattern\|publish_telemetry' zygisk-native/jni/gl_hooks.cpp
           grep -n 'max-page-size=16384\|GLESv2\|mediandk' zygisk-native/CMakeLists.txt
-          grep -n '2\.0\.0' magisk-module/module.prop
+          grep -n '2\.0' magisk-module/module.prop
 
       - name: Build Zygisk native with CMake (GL + MediaCodec)
         if: steps.setup-ndk.outcome == 'success'
@@ -146,20 +145,19 @@ jobs:
           done
           ls -la ../magisk-module/zygisk/ || true
 
-      - name: Package Magisk zip (v2.0.0-dev)
+      - name: Package Magisk zip (v2.0.1-dev)
         run: |
-          # Place primary ABI shadowhook next to module for dlopen fallback
           if [ -f magisk-module/libs/arm64-v8a/libshadowhook.so ]; then
             cp magisk-module/libs/arm64-v8a/libshadowhook.so magisk-module/libshadowhook.so
           fi
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v2.0.0-dev.zip | head -40
+          zip -r ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip | head -40
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v2.0.0-dev
-          path: VirtualCam-Manager-Magisk-v2.0.0-dev.zip
+          name: VirtualCam-Manager-Magisk-v2.0.1-dev
+          path: VirtualCam-Manager-Magisk-v2.0.1-dev.zip
           if-no-files-found: error
