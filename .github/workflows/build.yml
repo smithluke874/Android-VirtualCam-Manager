@@ -108,7 +108,7 @@ jobs:
           test -f zygisk-native/jni/gl_hooks.cpp
           test -f zygisk-native/jni/gl_hooks.h
           grep -n 'install_gl_hooks\|2\.0' zygisk-native/jni/main.cpp
-          grep -n 'yuv420sp_to_rgb\|ensure_upload_texture\|load_shadowhook\|hooked_glDrawElements\|fill_test_pattern\|publish_telemetry' zygisk-native/jni/gl_hooks.cpp
+          grep -n 'yuv420sp_to_rgb\|ensure_upload_texture\|load_shadowhook\|hooked_glDrawElements\|fill_test_pattern\|publish_telemetry\|upload_oes\|AHardwareBuffer\|eglGetNativeClientBufferANDROID' zygisk-native/jni/gl_hooks.cpp
           grep -n 'max-page-size=16384\|GLESv2\|mediandk' zygisk-native/CMakeLists.txt
           grep -n '2\.0' magisk-module/module.prop
 
@@ -145,19 +145,19 @@ jobs:
           done
           ls -la ../magisk-module/zygisk/ || true
 
-      - name: Package Magisk zip (v2.0.1-dev)
+      - name: Package Magisk zip (v2.0.2-dev)
         run: |
           if [ -f magisk-module/libs/arm64-v8a/libshadowhook.so ]; then
             cp magisk-module/libs/arm64-v8a/libshadowhook.so magisk-module/libshadowhook.so
           fi
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v2.0.1-dev.zip | head -40
+          zip -r ../VirtualCam-Manager-Magisk-v2.0.2-dev.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v2.0.2-dev.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v2.0.2-dev.zip | head -40
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v2.0.1-dev
-          path: VirtualCam-Manager-Magisk-v2.0.1-dev.zip
+          name: VirtualCam-Manager-Magisk-v2.0.2-dev
+          path: VirtualCam-Manager-Magisk-v2.0.2-dev.zip
           if-no-files-found: error
