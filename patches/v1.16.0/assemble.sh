@@ -35,19 +35,14 @@ else
   echo "WARN: MediaCodec symbols not found — pattern-only mode"
 fi
 
-# HomeScreen from complete hs patches (keep tree if already better)
+# HomeScreen: prefer tree if already live-status complete; else assemble from hs patches
 HS=patches/v1.16.0/homescreen
 DEST=manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt
-if [ -f "$HS/hs.00" ]; then
-  TMP=$(mktemp)
-  cat "$HS"/hs.* > "$TMP"
-  if grep -q pkgSuffix "$TMP" 2>/dev/null && grep -q 'delay(2000)' "$TMP" 2>/dev/null; then
-    mv "$TMP" "$DEST"
-    echo "Assembled HomeScreen.kt ($(wc -c < "$DEST") bytes)"
-  else
-    rm -f "$TMP"
-    echo "WARN: hs patches incomplete — keeping tree HomeScreen"
-  fi
+if [ -f "$DEST" ] && grep -q pkgSuffix "$DEST" 2>/dev/null && grep -q 'delay(2000)' "$DEST" 2>/dev/null; then
+  echo "Keeping tree HomeScreen (live-status already present, $(wc -c < "$DEST") bytes)"
+elif [ -f "$HS/hs.00" ]; then
+  cat "$HS"/hs.* > "$DEST"
+  echo "Assembled HomeScreen.kt ($(wc -c < "$DEST") bytes)"
 fi
 if [ -f "$DEST" ] && grep -q pkgSuffix "$DEST" 2>/dev/null; then
   echo "HomeScreen live-status OK"
