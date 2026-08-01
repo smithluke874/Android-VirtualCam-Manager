@@ -61,7 +61,7 @@ fun HomeScreen() {
     // Live status poll while enabled — keeps Home feeling alive
     LaunchedEffect(enabled) {
         while (enabled) {
-            delay(1500)
+            delay(1200)
             status = checker.check()
         }
     }
@@ -112,8 +112,10 @@ fun HomeScreen() {
             val modOk = s?.moduleInstalled == true || s?.zygiskLibPresent == true
             val vidOk = s?.hasVirtualVideo == true
             val hook = s?.hookStatus.orEmpty()
+            val frames = s?.decoderFrames ?: 0
+            val texId = s?.textureId ?: 0L
+            val hits = s?.bindHits ?: 0
 
-            // v2 GL statuses + legacy v1 names (honest live signal)
             val live = enabled && (
                 hook.startsWith("gl_bind_redir") ||
                 hook.startsWith("decoder_frames") ||
@@ -121,18 +123,21 @@ fun HomeScreen() {
                 hook.startsWith("gl_hooked") ||
                 hook.startsWith("decoder_running") ||
                 hook.startsWith("gl_tex_created") ||
+                frames > 0 ||
+                hits > 0 ||
                 hook.startsWith("nv21_video") ||
                 hook.startsWith("nv21_pattern") ||
                 hook.startsWith("surface_playing") ||
                 hook.startsWith("texture_swapped")
             )
-            val partial = enabled && (
+            val partial = enabled && !live && (
                 hook.startsWith("gl_partial") ||
                 hook.startsWith("gl_hook_fail") ||
                 hook.startsWith("gl_hook_pending") ||
                 hook.startsWith("gl_installing") ||
                 hook.startsWith("decoder_start") ||
-                hook.startsWith("no_video")
+                hook.startsWith("no_video") ||
+                hook.isNotEmpty()
             )
 
             val (title, body, ok) = when {
@@ -173,19 +178,48 @@ fun HomeScreen() {
                 }
             }
 
+            if (enabled && (frames > 0 || texId > 0 || hits > 0 || live || partial)) {
+                Row(
+                    M.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Frames $frames") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (frames > 0) Success.copy(alpha = 0.18f)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Tex ${if (texId > 0) texId else "—"}") }
+                    )
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Binds $hits") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (hits > 0) Success.copy(alpha = 0.18f)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                }
+            }
+
             Card(M.fillMaxWidth()) {
                 Row(
                     M.fillMaxWidth().padding(16.dp),
                     Arrangement.SpaceBetween,
                     Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(M.weight(1f)) {
                         Text(
                             if (enabled) "VirtualCam is ON" else "VirtualCam is OFF",
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            if (enabled) "Native GL path active — open a camera app" else "Tap to turn on",
+                            if (enabled) "Native GL path active — open a camera app"
+                            else "Tap to turn on",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -220,7 +254,7 @@ fun HomeScreen() {
                 Spacer(M.width(8.dp))
                 Text(
                     when {
-                        busy -> "Working..."
+                        busy -> "Working…"
                         vidOk -> "Replace video / image"
                         else -> "Pick video or image"
                     }
@@ -233,6 +267,30 @@ fun HomeScreen() {
                 )
             }
             msg?.let { Text(it, color = if (msgOk) Success else Danger) }
+
+            if (enabled) {
+                Card(
+                    M.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    )
+                ) {
+                    Column(M.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "What to expect right now",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            "v2 intercepts OpenGL texture binds and uploads decoded frames. " +
+                                    "Many camera apps still use samplerExternalOES — if the preview " +
+                                    "stays black or real, that is expected until Phase 2.1 (OES SurfaceTexture). " +
+                                    "Watch Frames / Binds rise when you open a camera app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             TextButton(onClick = { details = !details }, modifier = M.fillMaxWidth()) {
                 Text(if (details) "Hide details" else "Show details")
@@ -247,14 +305,14 @@ fun HomeScreen() {
                     "Zygisk .so" to s.zygiskLibPresent,
                     "virtual.mp4" to s.hasVirtualVideo,
                     "Enabled" to s.vcamEnabled
-                ).forEach { (title, good) ->
+                ).forEach { (label, good) ->
                     Card(M.fillMaxWidth().padding(vertical = 3.dp)) {
                         Row(
                             M.fillMaxWidth().padding(12.dp),
                             Arrangement.SpaceBetween,
                             Alignment.CenterVertically
                         ) {
-                            Text(title)
+                            Text(label)
                             Icon(
                                 if (good) Icons.Default.CheckCircle else Icons.Default.Error,
                                 null,
@@ -267,6 +325,12 @@ fun HomeScreen() {
                     val pkgSuffix = s.lastHookPkg?.let { pkg -> " · $pkg" } ?: ""
                     Text(
                         "Hook: $hs$pkgSuffix",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (frames > 0 || texId > 0 || hits > 0) {
+                    Text(
+                        "Telemetry: frames=$frames  texture=$texId  binds=$hits",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
