@@ -58,7 +58,7 @@ fun HomeScreen() {
         loading = false
     }
 
-    // Live status poll while enabled — keeps Home feeling alive without extra taps
+    // Live status poll while enabled - keeps Home feeling alive without extra taps
     LaunchedEffect(enabled) {
         while (enabled) {
             delay(2000)
@@ -70,7 +70,7 @@ fun HomeScreen() {
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             busy = true
-            msg = "Importing…"
+            msg = "Importing..."
             msgOk = true
             val r = importer.importFromUri(ctx, uri)
             msg = r.message
@@ -78,7 +78,7 @@ fun HomeScreen() {
             if (r.success && status?.rootAvailable == true) {
                 setup.runFullSetup(enable = true)
                 enabled = true
-                msg = "Ready — open any camera app"
+                msg = "Ready - open any camera app"
                 msgOk = true
             }
             status = checker.check()
@@ -137,8 +137,9 @@ fun HomeScreen() {
                     Text(title, style = MaterialTheme.typography.titleLarge)
                     Text(body, style = MaterialTheme.typography.bodyMedium)
                     if (enabled && hook.isNotEmpty()) {
+                        val pkgSuffix = s?.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
                         Text(
-                            "Status: $hook${s?.lastHookPkg?.let { \" · $it\" } ?: \"\"}",
+                            "Status: $hook$pkgSuffix",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (live) Success else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -193,7 +194,7 @@ fun HomeScreen() {
                 Spacer(M.width(8.dp))
                 Text(
                     when {
-                        busy -> "Working…"
+                        busy -> "Working..."
                         vidOk -> "Replace video / image"
                         else -> "Pick video or image"
                     }
@@ -236,9 +237,10 @@ fun HomeScreen() {
                         }
                     }
                 }
-                s.hookStatus?.let {
+                s.hookStatus?.let { hs ->
+                    val pkgSuffix = s.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
                     Text(
-                        "Hook: $it${s.lastHookPkg?.let { p -> \" · $p\" } ?: \"\"}",
+                        "Hook: $hs$pkgSuffix",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
