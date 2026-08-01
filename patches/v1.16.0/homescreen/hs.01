@@ -1,0 +1,45 @@
+    var msgOk by remember { mutableStateOf(true) }
+    var busy by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun refresh() = scope.launch {
+        loading = true; status = checker.check(); enabled = setup.isEnabled(); loading = false
+    }
+
+    LaunchedEffect(Unit) {
+        status = checker.check()
+        if (status?.rootAvailable == true) setup.runFullSetup(enable = setup.isEnabled())
+        enabled = setup.isEnabled(); status = checker.check(); loading = false
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true; msg = "Importing…"; msgOk = true
+            val r = importer.importFromUri(ctx, uri)
+            msg = r.message; msgOk = r.success
+            if (r.success && status?.rootAvailable == true) {
+                setup.runFullSetup(enable = true); enabled = true
+                msg = "Ready — open any camera app"; msgOk = true
+            }
+            status = checker.check(); busy = false
+        }
+    }
+
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("VirtualCam") }, actions = {
+            IconButton(onClick = { refresh() }) { Icon(Icons.Default.Refresh, "Refresh") }
+        })
+    }) { pad ->
+        Column(M.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (loading) {
+                Box(M.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Primary) }
+                return@Column
+            }
+            val s = status
+            val rootOk = s?.rootAvailable == true
+            val modOk = s?.moduleInstalled == true || s?.zygiskLibPresent == true
+            val vidOk = s?.hasVirtualVideo == true
+

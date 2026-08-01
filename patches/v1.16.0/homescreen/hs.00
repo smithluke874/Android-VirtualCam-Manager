@@ -1,0 +1,39 @@
+package com.virtualcam.manager.ui.screens
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier as M
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.virtualcam.manager.data.AutoSetup
+import com.virtualcam.manager.data.MediaImportHelper
+import com.virtualcam.manager.data.PrerequisiteChecker
+import com.virtualcam.manager.ui.theme.Danger
+import com.virtualcam.manager.ui.theme.Primary
+import com.virtualcam.manager.ui.theme.Success
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen() {
+    val ctx = LocalContext.current
+    val checker = remember { PrerequisiteChecker() }
+    val setup = remember { AutoSetup() }
+    val importer = remember { MediaImportHelper() }
+    var status by remember { mutableStateOf(checker.let { null as com.virtualcam.manager.data.PrerequisiteStatus? }) }
+    var loading by remember { mutableStateOf(true) }
+    var enabled by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
