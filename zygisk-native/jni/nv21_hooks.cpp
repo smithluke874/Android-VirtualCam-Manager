@@ -1,8 +1,10 @@
 /*
  * NV21 PreviewCallback path (classic VCAM algorithm part B)
+ * Pattern mode active. MediaCodec continuous video staged for next land.
  */
 #include "nv21_hooks.h"
 #include <cstdio>
+#include <cstring>
 #include <arthook/ArtHook.h>
 
 #define LOG_TAG "VirtualCamZygisk"
@@ -26,7 +28,47 @@ static void report_status(const char *pkg, const char *status) {
     FILE *f = fopen(kHookStatus, "w");
     if (f) { fputs(status, f); fclose(f); }
     f = fopen(kLastPkg, "w");
-    if (f) { fputs(pkg, f); fclose(f); }
+    if (f) { fputs(pkg ? pkg : "", f); fclose(f); }
+}
+
+bool Nv21FrameProvider::ensure(int w, int h) {
+    if (w <= 0 || h <= 0) return false;
+    std::lock_guard<std::mutex> lock(mu_);
+    size_t need = (size_t)w * (size_t)h * 3 / 2;
+    if (w_ != w || h_ != h || buf_.size() != need) {
+        buf_.assign(need, 0);
+        w_ = w; h_ = h; bar_x_ = 0;
+    }
+    fillLocked();
+    ready_ = true;
+    return true;
+}
+
+bool Nv21FrameProvider::copyInto(JNIEnv *env, jbyteArray arr) {
+    if (!env || !arr || !ready_) return false;
+    std::lock_guard<std::mutex> lock(mu_);
+    if (buf_.empty()) return false;
+    jsize len = env->GetArrayLength(arr);
+    if (len <= 0) return false;
+    jsize n = (jsize)(buf_.size() < (size_t)len ? buf_.size() : (size_t)len);
+    env->SetByteArrayRegion(arr, 0, n, reinterpret_cast<const jbyte*>(buf_.data()));
+    frame_count_++;
+    if ((frame_count_ % 3) == 0) {
+        bar_x_ = (bar_x_ + 8) % (w_ > 0 ? w_ : 1);
+        fillLocked();
+    }
+    return true;
+}
+
+void Nv21FrameProvider::fillLocked() {
+    if (buf_.empty() || w_ <= 0 || h_ <= 0) return;
+    size_t ySize = (size_t)w_ * (size_t)h_;
+    memset(buf_.data(), 0x80, ySize);
+    int barW = w_ / 16; if (barW < 4) barW = 4;
+    for (int y = 0; y < h_; y++)
+        for (int x = bar_x_; x < bar_x_ + barW && x < w_; x++)
+            buf_[(size_t)y * (size_t)w_ + (size_t)x] = (uint8_t)0xE0;
+    memset(buf_.data() + ySize, 0x80, buf_.size() - ySize);
 }
 
 static bool read_preview_size(JNIEnv *env, jobject camera, int *out_w, int *out_h) {
