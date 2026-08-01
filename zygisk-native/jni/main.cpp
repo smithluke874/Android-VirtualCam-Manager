@@ -1,10 +1,10 @@
 /*
- * VirtualCam Manager — Zygisk native module v2.0.2-dev
+ * VirtualCam Manager — Zygisk native module v2.0.3-probe1
  * Pure Magisk (NO LSPosed). Native OpenGL/EGL interception pivot.
  *
  * v1.x: ArtHook Java Camera1 path (legacy, retained in history only)
  * v2.0: ShadowHook + glBindTexture (GL_TEXTURE_EXTERNAL_OES) + AMediaCodec
- * v2.0.2: Phase 2.1 AHardwareBuffer + EGLImage OES path with 2D fallback
+ * v2.0.3: probe+doctor + Phase 2.1 AHardwareBuffer + EGLImage OES path with 2D fallback
  *
  * Status is honest: report hook/decoder states; do not claim camera spoof
  * until real apps show the virtual feed on device.
@@ -64,8 +64,8 @@ static void report_status(const char *pkg, const char *status) {
 }
 
 static void write_module_version() {
-    write_text(kModuleVersion, "2.0.2-dev");
-    write_text(kVersionFile, "2.0.2-dev");
+    write_text(kModuleVersion, "2.0.3-probe1");
+    write_text(kVersionFile, "2.0.3-probe1");
 }
 
 class VirtualCamModule : public zygisk::ModuleBase {
