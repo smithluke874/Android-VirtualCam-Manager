@@ -1,5 +1,5 @@
 /*
- * VirtualCam Manager — Zygisk native module v2.0.0-dev
+ * VirtualCam Manager — Zygisk native module v2.0.1-dev
  * Pure Magisk (NO LSPosed). Native OpenGL/EGL interception pivot.
  *
  * v1.x: ArtHook Java Camera1 path (legacy, retained in history only)
@@ -63,8 +63,8 @@ static void report_status(const char *pkg, const char *status) {
 }
 
 static void write_module_version() {
-    write_text(kModuleVersion, "2.0.0-dev");
-    write_text(kVersionFile, "2.0.0-dev");
+    write_text(kModuleVersion, "2.0.1-dev");
+    write_text(kVersionFile, "2.0.1-dev");
 }
 
 class VirtualCamModule : public zygisk::ModuleBase {
