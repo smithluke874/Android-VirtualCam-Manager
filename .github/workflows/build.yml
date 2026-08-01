@@ -87,14 +87,21 @@ jobs:
                  zygisk-native/third_party/arthook/examples
           test -f zygisk-native/third_party/arthook/include/arthook/ArtHook.h
 
+      - name: Assemble MediaCodec sources (v1.16.0)
+        run: |
+          if [ -f patches/v1.16.0/assemble.sh ]; then
+            chmod +x patches/v1.16.0/assemble.sh
+            bash patches/v1.16.0/assemble.sh
+          fi
+
       - name: Verify NV21 wiring
         run: |
           grep -n install_preview_callback_hooks zygisk-native/jni/main.cpp
           grep -n nv21_hooks.h zygisk-native/jni/main.cpp
           grep -n process_callback zygisk-native/jni/main.cpp
-          # MediaCodec symbols optional until full source lands
           grep -n NdkMediaCodec zygisk-native/jni/nv21_hooks.cpp || echo "MediaCodec not yet in tree (pattern mode)"
           grep -n mediandk zygisk-native/CMakeLists.txt || true
+          grep -n '1\.16\.0' zygisk-native/jni/main.cpp || true
 
       - name: Build Zygisk native with CMake + ArtHook
         if: steps.setup-ndk.outcome == 'success'
