@@ -90,10 +90,12 @@ jobs:
           test -f zygisk-native/third_party/arthook/include/arthook/ArtHook.h
           test -f zygisk-native/third_party/arthook/src/hook/HookEngine.cpp
 
-      - name: Apply main.cpp v1.15.0 NV21 wiring patch
+      - name: Verify NV21 wiring present in main.cpp
         run: |
-          patch -p1 < patches/v1.15.0-main.cpp.patch
-          grep -n install_preview_callback_hooks zygisk-native/jni/main.cpp && grep -n nv21_hooks.h zygisk-native/jni/main.cpp
+          grep -n install_preview_callback_hooks zygisk-native/jni/main.cpp
+          grep -n nv21_hooks.h zygisk-native/jni/main.cpp
+          grep -n process_callback zygisk-native/jni/main.cpp
+          grep -n '1\.15\.0' zygisk-native/jni/main.cpp
 
       - name: Build Zygisk native with CMake + ArtHook
         if: steps.setup-ndk.outcome == 'success'
