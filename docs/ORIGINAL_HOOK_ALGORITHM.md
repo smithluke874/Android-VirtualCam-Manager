@@ -1,7 +1,7 @@
 # Original android_virtual_cam algorithm (from HookMain.java)
 
 Source: https://github.com/w2016561536/android_virtual_cam  
-We reimplement this under **pure Magisk Zygisk + LSPlant / ArtHook** (no LSPosed manager).
+We reimplement this under **pure Magisk Zygisk + ArtHook** (no LSPosed manager).
 
 ## Control files (same paths we already automate)
 
@@ -29,9 +29,10 @@ We reimplement this under **pure Magisk Zygisk + LSPlant / ArtHook** (no LSPosed
 
 1. Hook `setPreviewCallback` / `setPreviewCallbackWithBuffer` / `setOneShotPreviewCallback`
 2. Hook the callback's `onPreviewFrame(byte[] data, Camera camera)`:
-   - First call: read preview size, start `VideoToFrames` decoder on `virtual.mp4` → NV21 into `data_buffer`
-   - Every call: `System.arraycopy(data_buffer, 0, data, 0, min(len))`
-3. `VideoToFrames` uses MediaCodec, output format NV21 (must match preview WxH).
+   - First call: read preview size, start MediaCodec decoder on `virtual.mp4` → NV21 into buffer
+   - Every call: copy latest NV21 frame into `data`
+3. Continuous loop: AMediaExtractor + AMediaCodec, scale/convert to preview WxH NV21.
+   Pattern (moving bar) is used only if the decoder cannot start.
 
 ### C. takePicture
 
@@ -52,16 +53,17 @@ Zygisk alone can:
 - gate processes (done)
 - PLT/JNI-native hook (limited for Camera Java API)
 
-**LSPlant** or **ArtHook** provides ART Java method hooking without installing LSPosed.  
-We init ArtHook / LSPlant inside our Zygisk `.so` and hook the same targets listed above.
+**ArtHook** provides ART Java method hooking without installing LSPosed.  
+We init ArtHook inside our Zygisk `.so` and hook the same targets listed above.
 
 ## Port status in this project
 
 | Piece | Status |
 |-------|--------|
-| Paths + flags + APK automation | Done |
-| Zygisk process gate + status | Done |
-| Compiled Zygisk `.so` in Magisk zip | Done (CI) |
-| MediaPlayer surface replacement | Partial (v1.12.0 JNI native attempt on setPreviewDisplay/startPreview) |
-| NV21 callback injection | Blueprint (needs ART hook + VideoToFrames) |
+| Paths + flags + APK automation | **Done** |
+| Zygisk process gate + status | **Done** |
+| Compiled Zygisk `.so` in Magisk zip | **Done** (CI multi-ABI) |
+| MediaPlayer surface replacement | **Done** (v1.13 ArtHook) |
+| NV21 callback injection (pattern) | **Done** (v1.15) |
+| MediaCodec continuous video→NV21 | **Done** (v1.16) |
 | Camera2 surface redirect | Blueprint |
