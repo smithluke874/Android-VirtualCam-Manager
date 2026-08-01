@@ -69,42 +69,43 @@ fun SettingsScreen() {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "VCAM Runtime Flags",
+                    text = "Runtime Flags",
                     style = MaterialTheme.typography.titleLarge
                 )
                 Text(
-                    text = "These create/delete the .jpg sentinel files that the original VCAM paths and exploit expected.",
+                    text = "These create/delete classic .jpg sentinel files under DCIM/Camera1. " +
+                            "The primary ON/OFF switch is the Home screen toggle (writes /data/adb/virtualcam/enabled).",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 FlagSwitch(
                     title = "Disable Module",
-                    subtitle = "Creates disable.jpg – temporarily turns off virtual camera",
+                    subtitle = "Creates disable.jpg – forces gate_off even if enabled flag is set",
                     checked = disable,
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_DISABLE, disable) { disable = it } }
                 )
                 FlagSwitch(
                     title = "Force Private Directory",
-                    subtitle = "Creates private_dir.jpg – use per-app Camera1 path",
+                    subtitle = "Creates private_dir.jpg – use per-app Camera1 path (legacy)",
                     checked = privateDir,
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_PRIVATE_DIR, privateDir) { privateDir = it } }
                 )
                 FlagSwitch(
                     title = "Enable Video Audio",
-                    subtitle = "Creates no-silent.jpg – play sound from virtual.mp4",
+                    subtitle = "Creates no-silent.jpg – allow audio from virtual.mp4 (legacy)",
                     checked = noSilent,
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_NO_SILENT, noSilent) { noSilent = it } }
                 )
                 FlagSwitch(
                     title = "Suppress Toasts",
-                    subtitle = "Creates no_toast.jpg – hide toast messages",
+                    subtitle = "Creates no_toast.jpg – hide toast messages (legacy)",
                     checked = noToast,
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_NO_TOAST, noToast) { noToast = it } }
                 )
                 FlagSwitch(
                     title = "Force Show",
-                    subtitle = "Creates force_show.jpg",
+                    subtitle = "Creates force_show.jpg (legacy)",
                     checked = forceShow,
                     onCheckedChange = { toggle(FileSystemRepository.FLAG_FORCE_SHOW, forceShow) { forceShow = it } }
                 )
@@ -113,9 +114,10 @@ fun SettingsScreen() {
 
                 Text("About", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "VirtualCam Manager is a pure Magisk module + single APK solution.\n" +
-                            "It manages the exact classic VCAM paths and flag files.\n" +
-                            "No LSPosed or Xposed is required. Future Zygisk native hooks will provide frame injection.",
+                    text = "VirtualCam Manager v2.0.0-dev\n" +
+                            "Pure Magisk + Zygisk (NO LSPosed).\n" +
+                            "Native OpenGL interception + AMediaCodec.\n" +
+                            "Device verification required before claiming a full camera spoof.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

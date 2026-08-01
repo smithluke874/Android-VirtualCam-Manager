@@ -31,12 +31,14 @@ fun TargetAppsScreen() {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("What works now", style = MaterialTheme.typography.titleMedium)
+                    Text("What works now (v2.0.0-dev)", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "• Magisk module creates /DCIM/Camera1 at boot\n" +
-                                "• This APK manages virtual.mp4 + all classic flag files\n" +
-                                "• No LSPosed / Xposed / second framework required\n" +
-                                "• Paths match original android_virtual_cam exactly",
+                        text = "• Magisk module + Zygisk native library (multi-ABI, 16 KB pages)\n" +
+                                "• This APK manages virtual.mp4 + enable flag (3-step UX)\n" +
+                                "• No LSPosed / Xposed / second framework\n" +
+                                "• Native OpenGL interception (ShadowHook on glBindTexture / glDraw*)\n" +
+                                "• AMediaCodec continuous decode → RGB texture upload\n" +
+                                "• Status written to /data/adb/virtualcam/hook_status",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -44,14 +46,13 @@ fun TargetAppsScreen() {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("What original VCAM did", style = MaterialTheme.typography.titleMedium)
+                    Text("Honest limitation", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "Original VCAM was an Xposed module. It hooked:\n" +
-                                "• Camera1: PreviewCallback, PictureCallback, SurfaceTexture\n" +
-                                "• Camera2: CameraManager, CameraDevice, CaptureRequest\n" +
-                                "Then fed frames from virtual.mp4 into the app.\n\n" +
-                                "The path/flag files alone do not replace the camera feed — " +
-                                "they are the control plane the hook reads.",
+                        text = "The current GL path uploads RGB into a GL_TEXTURE_2D and redirects " +
+                                "EXTERNAL_OES binds. Many Camera2 / CameraX shaders use samplerExternalOES " +
+                                "and may ignore a 2D texture. Phase 2.1 (OES SurfaceTexture / EGLImage) " +
+                                "is the next step for broader app coverage.\n\n" +
+                                "Do not claim a full camera spoof until real apps show the virtual feed on device.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -59,25 +60,28 @@ fun TargetAppsScreen() {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Next: Zygisk native hooks", style = MaterialTheme.typography.titleMedium)
+                    Text("Install (3 steps)", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "To stay pure Magisk (no LSPosed), frame injection will be " +
-                                "implemented as Zygisk .so libraries inside this same Magisk module.\n\n" +
-                                "The zygisk/ folder is already prepared. Once the native hooks land, " +
-                                "you still only flash this one module + install this one APK.",
+                        text = "1. Magisk → Zygisk ON → flash the module zip → reboot\n" +
+                                "2. Install this Manager APK → grant root\n" +
+                                "3. Home → Pick video/image → flip VirtualCam ON → open any camera app",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
 
-            Text(
-                text = "Until Zygisk hooks are complete, use this stack to prepare the " +
-                        "environment and verify paths/flags on your device. Any future " +
-                        "hook (or app that already respects the classic layout) will work " +
-                        "with the same files this APK manages.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Control plane files", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "/data/adb/virtualcam/enabled\n" +
+                                "/data/adb/virtualcam/hook_status\n" +
+                                "/data/adb/virtualcam/virtual.mp4  (fallback)\n" +
+                                "/storage/emulated/0/DCIM/Camera1/virtual.mp4  (primary)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
 }
