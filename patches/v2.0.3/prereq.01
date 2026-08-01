@@ -1,0 +1,20 @@
+ = null
+) {
+    val allPassed: Boolean
+        get() = rootAvailable && magiskPresent && camera1Ready
+}
+
+class PrerequisiteChecker(
+    private val fileSystem: FileSystemRepository = FileSystemRepository()
+) {
+
+    suspend fun check(): PrerequisiteStatus = withContext(Dispatchers.IO) {
+        val root = RootShell.isRootAvailable()
+        val magisk = RootShell.exec("[ -d /data/adb/magisk ] && echo 1").out.firstOrNull()?.trim() == "1" ||
+                RootShell.exec("pm path com.topjohnwu.magisk").isSuccess ||
+                RootShell.exec("which magisk").isSuccess
+        val modulePathCheck = RootShell.exec(
+            "[ -d /data/adb/modules/virtualcam_manager ] && echo 1 || echo 0"
+        ).out.firstOrNull()?.trim() == "1"
+        val markerCheck = RootShell.exec(
+            "[ 
