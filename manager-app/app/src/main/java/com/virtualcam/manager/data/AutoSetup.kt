@@ -4,7 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * One-shot automation: prepare the entire pure-Magisk VirtualCam environment
+ * One-shot automation: prepare the pure-Magisk VirtualCam environment
  * from the APK with root. No manual shell steps required.
  */
 class AutoSetup(
@@ -34,11 +34,7 @@ class AutoSetup(
         }
 
         val camera1 = fs.ensureGlobalCamera1()
-
-        val control = RootShell.exec(
-            "mkdir -p /data/adb/virtualcam",
-            "chmod 755 /data/adb/virtualcam"
-        ).isSuccess
+        val control = fs.ensureControlDir()
 
         val module = RootShell.exec(
             "[ -d /data/adb/modules/virtualcam_manager ] && echo 1 || echo 0"
@@ -47,13 +43,15 @@ class AutoSetup(
                 "[ -f /data/adb/virtualcam/module_installed ] && echo 1 || echo 0"
             ).out.firstOrNull()?.trim() == "1"
 
-        // Write config Zygisk + service scripts read
         val enabledCmd = if (enable) {
             listOf(
                 "echo 1 > /data/adb/virtualcam/enabled",
                 "echo 'mode=global' > /data/adb/virtualcam/config",
                 "echo 'path=/storage/emulated/0/DCIM/Camera1/virtual.mp4' >> /data/adb/virtualcam/config",
-                "rm -f /storage/emulated/0/DCIM/Camera1/disable.jpg"
+                "rm -f /storage/emulated/0/DCIM/Camera1/disable.jpg",
+                // Keep control-plane copy in sync if Camera1 has the file
+                "[ -f /storage/emulated/0/DCIM/Camera1/virtual.mp4 ] && " +
+                    "cp -f /storage/emulated/0/DCIM/Camera1/virtual.mp4 /data/adb/virtualcam/virtual.mp4 || true"
             )
         } else {
             listOf(
@@ -64,13 +62,13 @@ class AutoSetup(
         }
         val enabledWritten = RootShell.exec(*enabledCmd.toTypedArray()).isSuccess
 
-        // Ensure service marker for APK feedback loop
         RootShell.exec("date +%s > /data/adb/virtualcam/last_setup")
 
         val msg = buildString {
             append(if (enable) "VirtualCam ENABLED. " else "VirtualCam DISABLED. ")
-            if (!module) append("Flash Magisk module + reboot for full path persistence. ")
-            append("Place virtual.mp4 via Media tab (or Import from Downloads).")
+            if (!module) append("Flash Magisk module + reboot for Zygisk path. ")
+            if (enable) append("Open any camera app to test.")
+            else append("Camera apps will see the real camera again.")
         }
 
         Result(
