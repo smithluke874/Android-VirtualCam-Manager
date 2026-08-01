@@ -1,30 +1,58 @@
-            )) {
-                Row(M.fillMaxWidth().padding(16.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                    Column(M.weight(1f)) {
-                        Text(if (enabled) "VirtualCam is ON" else "VirtualCam is OFF", style = MaterialTheme.typography.titleMedium)
-                        Text(if (enabled) "Camera apps see your video" else "Tap to turn on", style = MaterialTheme.typography.bodySmall)
+                live -> Triple("Working", "Camera apps are seeing your video.", true)
+                else -> Triple("Ready", "Open any camera app. Status updates automatically.", true)
+            }
+
+            Card(
+                M.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (ok) Success.copy(alpha = 0.12f)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(M.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                    Text(body, style = MaterialTheme.typography.bodyMedium)
+                    if (enabled && hook.isNotEmpty()) {
+                        val pkgSuffix = s?.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
+                        Text(
+                            "Status: $hook$pkgSuffix",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (live) Success else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Switch(checked = enabled, enabled = !busy && rootOk, onCheckedChange = { want ->
-                        scope.launch {
-                            busy = true
-                            val r = setup.runFullSetup(enable = want)
-                            msg = r.message; msgOk = r.rootOk
-                            enabled = setup.isEnabled(); status = checker.check(); busy = false
-                        }
-                    })
                 }
             }
 
-            Button(onClick = {
-                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-            }, enabled = !busy && rootOk, modifier = M.fillMaxWidth()) {
-                Icon(Icons.Default.Upload, null); Spacer(M.width(8.dp))
-                Text(when { busy -> "Working…"; vidOk -> "Replace video / image"; else -> "Pick video or image" })
+            Card(M.fillMaxWidth()) {
+                Row(
+                    M.fillMaxWidth().padding(16.dp),
+                    Arrangement.SpaceBetween,
+                    Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            if (enabled) "VirtualCam is ON" else "VirtualCam is OFF",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            if (enabled) "Camera apps see your video" else "Tap to turn on",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = enabled,
+                        enabled = !busy && rootOk,
+                        onCheckedChange = { want ->
+                            scope.launch {
+                                busy = true
+                                val r = setup.runFullSetup(enable = want)
+                                msg = r.message
+                                msgOk = r.rootOk
+                                enabled = setup.isEnabled()
+                                status = checker.check()
+                                busy = false
+                            }
+                        }
+                    )
+                }
             }
-            if (!vidOk) Text("Images become a short looping video automatically.", style = MaterialTheme.typography.bodySmall)
-            msg?.let { Text(it, color = if (msgOk) Success else Danger) }
-
-            TextButton(onClick = { details = !details }, modifier = M.fillMaxWidth()) {
-                Text(if (details) "Hide details" else "Show details")
-            }
-            if (details && s != null) {
