@@ -1,0 +1,36 @@
+diff --git a/zygisk-native/jni/main.cpp b/zygisk-native/jni/main.cpp
+index 5743134..bb066df 100644
+--- a/zygisk-native/jni/main.cpp
++++ b/zygisk-native/jni/main.cpp
+@@ -1,9 +1,9 @@
+ /*
+- * VirtualCam Manager — Zygisk native module v1.15.0
++ * VirtualCam Manager — Zygisk native module v1.16.0
+  * Pure Magisk (NO LSPosed). Companion gate + JNI Camera hooks + ArtHook ART hooks.
+  *
+  * v1.13.0: ArtHook setPreviewTexture / startPreview / setPreviewDisplay + MediaPlayer
+- * v1.15.0: ArtHook setPreviewCallback* + onPreviewFrame NV21 (see nv21_hooks.cpp)
++ * v1.16.0: ArtHook setPreviewCallback* + onPreviewFrame NV21 (see nv21_hooks.cpp)
+  */
+ #include <cstdlib>
+ #include <cstring>
+@@ -73,8 +73,8 @@ static void report_status(const char *pkg, const char *status) {
+ }
+ 
+ static void write_module_version() {
+-    write_text(kModuleVersion, "1.15.0");
+-    write_text(kVersionFile, "1.15.0");
++    write_text(kModuleVersion, "1.16.0");
++    write_text(kVersionFile, "1.16.0");
+ }
+ 
+ class VideoFrameProvider {
+@@ -469,6 +469,8 @@ public:
+             report_status(state.process, "no_video");
+             return;
+         }
++        // Prime NV21 provider with the same video path (MediaCodec path)
++        g_nv21.setVideoPath(kCamera1Video);
+         int methods_found = prepare_method_scaffold(env, state.process);
+         int art_n = install_art_hooks(env, state.process);
+         int jni_n = install_jni_hooks(env);
