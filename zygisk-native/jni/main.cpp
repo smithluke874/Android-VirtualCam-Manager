@@ -1,6 +1,9 @@
 /*
- * VirtualCam Manager — Zygisk native module v1.10.0
- * Pure Magisk (NO LSPosed). Companion gate + JNI Camera hooks + LSPlant method reflection.
+ * VirtualCam Manager — Zygisk native module v1.11.0
+ * Pure Magisk (NO LSPosed). Companion gate + JNI Camera hooks + LSPlant readiness.
+ *
+ * Next milestone: real LSPlant ART hooks for setPreviewTexture / PreviewCallback
+ * so virtual.mp4 actually appears in other apps' camera previews.
  */
 #include <cstdlib>
 #include <cstring>
@@ -64,27 +67,40 @@ static void report_status(const char *pkg, const char *status) {
 }
 
 static void write_module_version() {
-    write_text(kModuleVersion, "1.10.0");
-    write_text(kVersionFile, "1.10.0");
+    write_text(kModuleVersion, "1.11.0");
+    write_text(kVersionFile, "1.11.0");
 }
 
+/*
+ * Frame provider skeleton.
+ * Later: open MediaCodec decoder on virtual.mp4, produce NV21 frames
+ * that PreviewCallback hooks can memcpy into the app's byte[] buffer,
+ * and/or feed a SurfaceTexture that setPreviewTexture can swap in.
+ */
 class VideoFrameProvider {
 public:
     bool open(const char *path) {
         path_ = path;
-        if (!file_exists(path)) { LOGE("video missing: %s", path); return false; }
+        if (!file_exists(path)) {
+            LOGE("video missing: %s", path);
+            opened_ = false;
+            return false;
+        }
         struct stat st{};
         if (stat(path, &st) == 0 && st.st_size > 0) {
             size_ = st.st_size;
-            LOGI("video ready path=%s size=%lld", path, (long long)size_);
+            LOGI("video ready path=%s size=%lld (frame provider ready for MediaCodec)",
+                 path, (long long)size_);
             opened_ = true;
             return true;
         }
+        opened_ = false;
         return false;
     }
     bool isOpen() const { return opened_; }
     const char *path() const { return path_.c_str(); }
     off_t size() const { return size_; }
+    // Future: bool nextNv21(uint8_t *out, size_t out_len, int *w, int *h);
 private:
     std::string path_;
     off_t size_ = 0;
@@ -151,10 +167,14 @@ static int install_jni_hooks(JNIEnv *env) {
     return hooked;
 }
 
-/* Reflect Camera Java methods that LSPlant will later hook. Status -> hook_status. */
+/*
+ * Reflect Camera Java methods that LSPlant will later hook.
+ * When enough methods are visible we report ready_for_lsplant so the APK
+ * can show that the environment is prepared for the real ART hooks.
+ */
 static int prepare_lsplant_scaffold(JNIEnv *env, const char *pkg) {
     if (!env) { report_status(pkg, "preparing"); return 0; }
-    LOGI("LSPlant scaffold v1.10.0 — reflecting Camera Java methods");
+    LOGI("LSPlant scaffold v1.11.0 — reflecting Camera Java methods");
     jclass camera_cls = env->FindClass("android/hardware/Camera");
     if (!camera_cls) {
         env->ExceptionClear();
@@ -179,9 +199,13 @@ static int prepare_lsplant_scaffold(JNIEnv *env, const char *pkg) {
     }
     env->DeleteLocalRef(camera_cls);
     char status_buf[64];
-    if (found >= 4) snprintf(status_buf, sizeof(status_buf), "methods_ok:%d/%d", found, total);
-    else if (found > 0) snprintf(status_buf, sizeof(status_buf), "preparing:%d/%d", found, total);
-    else snprintf(status_buf, sizeof(status_buf), "preparing:0/%d", total);
+    if (found >= 4) {
+        snprintf(status_buf, sizeof(status_buf), "ready_for_lsplant:%d/%d", found, total);
+    } else if (found > 0) {
+        snprintf(status_buf, sizeof(status_buf), "preparing:%d/%d", found, total);
+    } else {
+        snprintf(status_buf, sizeof(status_buf), "preparing:0/%d", total);
+    }
     LOGI("LSPlant prep: %s", status_buf);
     report_status(pkg, status_buf);
     return found;
@@ -236,7 +260,7 @@ public:
         if (n > 0) {
             if (methods_found >= 4) {
                 char buf[64];
-                snprintf(buf, sizeof(buf), "hooked+methods:%d", n);
+                snprintf(buf, sizeof(buf), "hooked+ready:%d", n);
                 report_status(state.process, buf);
             } else {
                 report_status(state.process, "hooked");
