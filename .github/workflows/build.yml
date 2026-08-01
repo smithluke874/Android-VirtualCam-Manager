@@ -12,6 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Assemble staged sources (HomeScreen + MediaCodec)
+        run: |
+          if [ -f patches/v1.16.0/assemble.sh ]; then
+            chmod +x patches/v1.16.0/assemble.sh
+            bash patches/v1.16.0/assemble.sh || true
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
