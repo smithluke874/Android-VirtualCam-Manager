@@ -36,4 +36,3 @@ fun HomeScreen() {
     val importer = remember { MediaImportHelper() }
     var status by remember { mutableStateOf(checker.let { null as com.virtualcam.manager.data.PrerequisiteStatus? }) }
     var loading by remember { mutableStateOf(true) }
-    var enabled by remember { mutableStateOf(false) }

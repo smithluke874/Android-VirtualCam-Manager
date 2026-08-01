@@ -1,3 +1,4 @@
+    var enabled by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     var msgOk by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -46,3 +47,8 @@
             busy = false
         }
     }
+
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("VirtualCam") },
+            actions = {

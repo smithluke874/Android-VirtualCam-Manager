@@ -1,3 +1,9 @@
+                    val pkgSuffix = s.lastHookPkg?.let { pkg -> " · " + pkg } ?: ""
+                    Text(
+                        "Hook: $hs$pkgSuffix",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
