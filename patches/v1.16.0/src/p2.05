@@ -1,0 +1,4 @@
+        "(Landroid/hardware/Camera$PreviewCallback;)V",
+        reinterpret_cast<void*>(&Hooked_setOneShotPreviewCallback)) == arthook::Status::kOk) n++;
+    return n;
+}
