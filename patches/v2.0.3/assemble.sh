@@ -32,8 +32,19 @@ assemble_if_complete() {
   fi
 }
 
+# 3) Base64-encoded PrerequisiteChecker
+if ls "$SRC"/prereq_b64.* 1>/dev/null 2>&1; then
+  B64=$(cat "$SRC"/prereq_b64.*)
+  if echo "$B64" | base64 -d > /tmp/prereq_decoded.kt 2>/dev/null; then
+    if grep -q 'requestProbe' /tmp/prereq_decoded.kt; then
+      cp /tmp/prereq_decoded.kt manager-app/app/src/main/java/com/virtualcam/manager/data/PrerequisiteChecker.kt
+      echo "Assembled PrerequisiteChecker.kt from b64 ($(wc -c < manager-app/app/src/main/java/com/virtualcam/manager/data/PrerequisiteChecker.kt) bytes)"
+    fi
+  fi
+  rm -f /tmp/prereq_decoded.kt
+fi
+
 assemble_if_complete 'homescreen.*' manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt 'requestProbe'
-assemble_if_complete 'prereq.*' manager-app/app/src/main/java/com/virtualcam/manager/data/PrerequisiteChecker.kt 'requestProbe'
 assemble_if_complete 'targetapps.*' manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/TargetAppsScreen.kt 'Roadmap'
 assemble_if_complete 'build_yml.*' .github/workflows/build.yml 'v2.0.3-probe1'
 assemble_if_complete 'readme.*' README.md 'Failure Doctor'
