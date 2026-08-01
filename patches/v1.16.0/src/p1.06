@@ -6,3 +6,5 @@
             mime = m;
             break;
         }
+        AMediaFormat_delete(f);
+    }

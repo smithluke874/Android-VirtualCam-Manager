@@ -1,7 +1,3 @@
-        }
-        AMediaFormat_delete(f);
-    }
-
     if (track < 0 || !fmt || !mime) {
         LOGE("decoder: no video track");
         if (fmt) AMediaFormat_delete(fmt);
