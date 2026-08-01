@@ -1,72 +1,40 @@
-# Zygisk native module (VirtualCam)
+# VirtualCam Zygisk native (v2.0.0-dev)
 
-Pure Magisk Zygisk — **no LSPosed manager**.
+## Architecture pivot
 
-## Build (on CI or with NDK)
+v1 used ArtHook on Java `android.hardware.Camera` APIs. That path is fragile on
+Android 14–16 (ART inlining, PAC/BTI, 16 KB pages, native camera engines).
 
-```bash
-# Requires Android NDK
-export NDK=$ANDROID_NDK_HOME   # e.g. $ANDROID_HOME/ndk/26.1.10909125
-cd zygisk-native
-$NDK/ndk-build -j$(nproc)
+v2 intercepts at the **OpenGL ES** layer:
 
-# Outputs:
-#   libs/arm64-v8a/libvirtualcam.so
-#   libs/armeabi-v7a/libvirtualcam.so
-#   libs/x86_64/libvirtualcam.so
+1. ShadowHook on `libGLESv2.so!glBindTexture`
+2. When target is `GL_TEXTURE_EXTERNAL_OES` and a virtual texture is ready,
+   redirect the texture ID
+3. Background `AMediaCodec` loop over `virtual.mp4`
 
-# Package into Magisk module:
-cp libs/arm64-v8a/libvirtualcam.so   ../magisk-module/zygisk/arm64-v8a.so
-cp libs/armeabi-v7a/libvirtualcam.so ../magisk-module/zygisk/armeabi-v7a.so
-cp libs/x86_64/libvirtualcam.so      ../magisk-module/zygisk/x86_64.so
-```
+## Honest status
 
-`zygisk.hpp` is pulled from [topjohnwu/zygisk-module-sample](https://github.com/topjohnwu/zygisk-module-sample) during CI.
+| Status string | Meaning |
+|---------------|---------|
+| `gate_off` / `no_video` | Control plane closed |
+| `gl_installing` | Installing hooks |
+| `gl_hooked` / `gl_ready` | glBindTexture hooked |
+| `gl_hook_fail` / `gl_partial` | Hook incomplete |
+| `gl_hook_pending_shadowhook` | Built without ShadowHook |
+| `decoder_start` / `decoder_running` / `decoder_frames:N` | MediaCodec active |
+| `gl_bind_redir:tex#N` | Bind redirect hit (not proof of visible feed) |
 
-## Control plane (APK writes, Zygisk reads)
+**Do not claim “camera spoofed” until real apps show the virtual video on device.**
 
-| Path | Meaning |
-|------|---------|
-| `/data/adb/virtualcam/enabled` | `1` = on, `0` = off |
-| `/data/adb/virtualcam/hook_status` | live status written by Zygisk |
-| `/data/adb/virtualcam/last_hook_pkg` | last package that received hooks |
-| `/data/adb/virtualcam/module_version` / `version` | e.g. 1.9.1 |
-| `/DCIM/Camera1/virtual.mp4` | source video |
-| `/DCIM/Camera1/disable.jpg` | hard off (classic flag) |
+## Build
 
-## Status values written to hook_status
+- NDK r26+ recommended
+- Link flags include `-Wl,-z,max-page-size=16384`
+- Optional: place ShadowHook under `third_party/shadowhook/`
 
-- `gate_off` – enabled flag is 0 or disable.jpg present
-- `no_video` – virtual.mp4 missing or empty
-- `active` – gate open + video present, but no matching JNI natives on this ROM
-- `hooked` – JNI Camera1 native methods successfully rewritten
-- `preparing` – LSPlant scaffold active, waiting for real Init/Hook (v1.9.1+)
-- `injecting` – (future) LSPlant Java hooks + frame replacement active
+## Next hardening
 
-## Current capability (v1.9.1)
-
-- Companion process gate + enable/disable detection: **done**
-- Process selection + DLCLOSE when inactive: **done**
-- JNI native hooks on android.hardware.Camera (log + call original): **done**
-- Module version written from native + service.sh: **done**
-- LSPlant InitInfo shape + target method list documented in source: **done**
-- Status now reports **preparing** when scaffold runs: **done** (v1.9.1)
-- Full visual frame injection (setPreviewTexture / NV21 overwrite): **next**
-
-## Next: real LSPlant integration (pure Magisk, no LSPosed manager)
-
-Target Java methods (from docs/ORIGINAL_HOOK_ALGORITHM.md):
-
-1. `Camera.setPreviewTexture(SurfaceTexture)`
-2. `Camera.setPreviewCallback` / `setPreviewCallbackWithBuffer` / `setOneShotPreviewCallback`
-3. `Camera.startPreview`
-4. `PreviewCallback.onPreviewFrame` for NV21 replacement
-
-Plan:
-- Add lsplant-standalone headers + static lib (or build from source in CI with CMake)
-- Provide InitInfo with inline_hooker (Dobby or equivalent) + art_symbol_resolver
-- Init in postAppSpecialize after gate opens
-- Keep existing JNI hooks as secondary / logging layer
-- Write richer status so APK can show “injecting”
-
-This keeps the project 100% Magisk module + single companion APK.
+1. OES texture + SurfaceTexture fed by MediaCodec (Phase 2)
+2. Hook `ASurfaceTexture_updateTexImage` / draw paths
+3. `ANativeWindow_queueBuffer` fallback for non-GL apps
+4. Device matrix testing
