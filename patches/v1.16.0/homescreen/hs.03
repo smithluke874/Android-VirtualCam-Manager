@@ -1,0 +1,30 @@
+            )) {
+                Row(M.fillMaxWidth().padding(16.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Column(M.weight(1f)) {
+                        Text(if (enabled) "VirtualCam is ON" else "VirtualCam is OFF", style = MaterialTheme.typography.titleMedium)
+                        Text(if (enabled) "Camera apps see your video" else "Tap to turn on", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = enabled, enabled = !busy && rootOk, onCheckedChange = { want ->
+                        scope.launch {
+                            busy = true
+                            val r = setup.runFullSetup(enable = want)
+                            msg = r.message; msgOk = r.rootOk
+                            enabled = setup.isEnabled(); status = checker.check(); busy = false
+                        }
+                    })
+                }
+            }
+
+            Button(onClick = {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            }, enabled = !busy && rootOk, modifier = M.fillMaxWidth()) {
+                Icon(Icons.Default.Upload, null); Spacer(M.width(8.dp))
+                Text(when { busy -> "Working…"; vidOk -> "Replace video / image"; else -> "Pick video or image" })
+            }
+            if (!vidOk) Text("Images become a short looping video automatically.", style = MaterialTheme.typography.bodySmall)
+            msg?.let { Text(it, color = if (msgOk) Success else Danger) }
+
+            TextButton(onClick = { details = !details }, modifier = M.fillMaxWidth()) {
+                Text(if (details) "Hide details" else "Show details")
+            }
+            if (details && s != null) {

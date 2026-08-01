@@ -1,0 +1,17 @@
+                listOf(
+                    "Root" to s.rootAvailable, "Magisk" to s.magiskPresent,
+                    (if (s.moduleVersion != null) "Module (${s.moduleVersion})" else "Module") to (s.moduleInstalled || s.zygiskLibPresent),
+                    "Zygisk .so" to s.zygiskLibPresent, "virtual.mp4" to s.hasVirtualVideo, "Enabled" to s.vcamEnabled
+                ).forEach { (title, good) ->
+                    Card(M.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Row(M.fillMaxWidth().padding(12.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                            Text(title)
+                            Icon(if (good) Icons.Default.CheckCircle else Icons.Default.Error, null, tint = if (good) Success else Danger)
+                        }
+                    }
+                }
+                s.hookStatus?.let { Text("Hook: $it${s.lastHookPkg?.let { p -> " · $p" } ?: ""}", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+}

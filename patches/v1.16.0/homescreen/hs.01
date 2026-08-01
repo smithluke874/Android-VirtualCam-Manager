@@ -39,7 +39,3 @@
                 return@Column
             }
             val s = status
-            val rootOk = s?.rootAvailable == true
-            val modOk = s?.moduleInstalled == true || s?.zygiskLibPresent == true
-            val vidOk = s?.hasVirtualVideo == true
-

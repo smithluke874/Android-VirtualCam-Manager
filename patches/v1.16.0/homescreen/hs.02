@@ -1,0 +1,27 @@
+            val rootOk = s?.rootAvailable == true
+            val modOk = s?.moduleInstalled == true || s?.zygiskLibPresent == true
+            val vidOk = s?.hasVirtualVideo == true
+
+            val (t, b, ok) = when {
+                !rootOk -> Triple("Grant root", "Allow root in Magisk for this app, then refresh.", false)
+                !modOk -> Triple("Flash Magisk module", "Install the Magisk zip, enable Zygisk, reboot.", false)
+                !vidOk -> Triple("Pick a video or image", "One tap below. Images become a looping video.", false)
+                !enabled -> Triple("Turn VirtualCam ON", "Flip the switch, then open any camera app.", false)
+                else -> {
+                    val h = s?.hookStatus
+                    if (h != null && (h.startsWith("nv21_") || h.startsWith("surface_") || h.startsWith("texture_") || h.startsWith("art_")))
+                        Triple("Working", "Hook: $h${s.lastHookPkg?.let { " · $it" } ?: ""}", true)
+                    else Triple("Ready", "Open any camera app. Refresh to see hook status.", true)
+                }
+            }
+            Card(M.fillMaxWidth(), colors = CardDefaults.cardColors(
+                containerColor = if (ok) Success.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            )) {
+                Column(M.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(t, style = MaterialTheme.typography.titleMedium)
+                    Text(b, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            Card(M.fillMaxWidth(), colors = CardDefaults.cardColors(
+                containerColor = if (enabled) Success.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
