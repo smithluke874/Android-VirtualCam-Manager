@@ -1,0 +1,153 @@
+/*
+ * VirtualCam Manager — Zygisk native module v1.16.0
+ * Pure Magisk (NO LSPosed). Companion gate + JNI Camera hooks + ArtHook ART hooks.
+ *
+ * v1.13: ArtHook setPreviewTexture / startPreview / setPreviewDisplay + MediaPlayer
+ * v1.15: ArtHook setPreviewCallback* + dynamic onPreviewFrame NV21 overwrite
+ * v1.16: MediaCodec continuous video → NV21 (real frames, patterned fallback)
+ */
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <android/log.h>
+#include <string>
+#include <cstdio>
+#include <vector>
+
+#include "zygisk.hpp"
+#include <arthook/ArtHook.h>
+#include <arthook/Hooked.h>
+#include "nv21_hooks.h"
+
+using zygisk::Api;
+using zygisk::AppSpecializeArgs;
+using zygisk::ServerSpecializeArgs;
+
+#define LOG_TAG "VirtualCamZygisk"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+
+static constexpr const char *kEnabledPath   = "/data/adb/virtualcam/enabled";
+static constexpr const char *kCamera1Video  = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+static constexpr const char *kDisableFlag   = "/storage/emulated/0/DCIM/Camera1/disable.jpg";
+static constexpr const char *kHookStatus    = "/data/adb/virtualcam/hook_status";
+static constexpr const char *kLastPkg       = "/data/adb/virtualcam/last_hook_pkg";
+static constexpr const char *kModuleVersion = "/data/adb/virtualcam/module_version";
+static constexpr const char *kVersionFile   = "/data/adb/virtualcam/version";
+
+struct VcamState {
+    bool global_enabled = false;
+    bool disable_flag   = false;
+    bool has_video      = false;
+    bool should_hook    = false;
+    char process[256]{};
+};
+
+static bool file_exists(const char *path) {
+    struct stat st{};
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static bool read_enabled() {
+    int fd = open(kEnabledPath, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    char buf[8]{};
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    return n > 0 && buf[0] == '1';
+}
+
+static void write_text(const char *path, const char *text) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd < 0) return;
+    write(fd, text, strlen(text));
+    close(fd);
+}
+
+static void report_status(const char *pkg, const char *status) {
+    write_text(kHookStatus, status);
+    write_text(kLastPkg, pkg);
+}
+
+static void write_module_version() {
+    write_text(kModuleVersion, "1.16.0");
+    write_text(kVersionFile, "1.16.0");
+}
+
+class VideoFrameProvider {
+public:
+    bool open(const char *path) {
+        path_ = path;
+        if (!file_exists(path)) {
+            LOGE("video missing: %s", path);
+            opened_ = false;
+            return false;
+        }
+        struct stat st{};
+        if (stat(path, &st) == 0 && st.st_size > 0) {
+            size_ = st.st_size;
+            LOGI("video ready path=%s size=%lld", path, (long long)size_);
+            opened_ = true;
+            return true;
+        }
+        opened_ = false;
+        return false;
+    }
+    bool isOpen() const { return opened_; }
+    const char *path() const { return path_.c_str();
+    }
+    off_t size() const { return size_; }
+
+    void setOriginalTexture(JNIEnv *env, jobject st) {
+        if (orig_st_) { env->DeleteGlobalRef(orig_st_); orig_st_ = nullptr; }
+        if (st) { orig_st_ = env->NewGlobalRef(st); LOGI("stored original SurfaceTexture"); }
+    }
+    jobject originalTexture() const { return orig_st_; }
+
+    void setSurface(JNIEnv *env, jobject surface) {
+        if (g_surface_) { env->DeleteGlobalRef(g_surface_); g_surface_ = nullptr; }
+        if (surface) { g_surface_ = env->NewGlobalRef(surface); LOGI("stored preview Surface"); }
+    }
+    jobject surface() const { return g_surface_; }
+
+    bool tryStartMediaPlayer(JNIEnv *env) {
+        if (!opened_ || !env) return false;
+        if (playing_) return true;
+
+        jobject target_surface = g_surface_;
+        jobject local_surface = nullptr;
+
+        if (!target_surface && orig_st_) {
+            jclass surfCls = env->FindClass("android/view/Surface");
+            if (surfCls) {
+                jmethodID ctor = env->GetMethodID(surfCls, "<init>", "(Landroid/graphics/SurfaceTexture;)V");
+                if (ctor) {
+                    local_surface = env->NewObject(surfCls, ctor, orig_st_);
+                    if (local_surface && !env->ExceptionCheck()) {
+                        target_surface = local_surface;
+                        LOGI("created Surface from original SurfaceTexture");
+                    } else {
+                        env->ExceptionClear();
+                        local_surface = nullptr;
+                    }
+                }
+                env->DeleteLocalRef(surfCls);
+            }
+        }
+        if (!target_surface) {
+            LOGE("no Surface/SurfaceTexture for MediaPlayer");
+            return false;
+        }
+
+        jclass mpCls = env->FindClass("android/media/MediaPlayer");
+        if (!mpCls) {
+            env->ExceptionClear();
+            LOGE("MediaPlayer class not found");
+            if (local_surface) env->DeleteLocalRef(local_surface);
+            return false;
+        }
+        jmethodID ctor = env->GetMethodID(mpCls, "<init>", "()V");
