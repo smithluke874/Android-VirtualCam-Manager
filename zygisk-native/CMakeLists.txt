@@ -9,7 +9,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # ArtHook static library (vendored)
 add_subdirectory(third_party/arthook)
 
-add_library(virtualcam SHARED jni/main.cpp)
+add_library(virtualcam SHARED jni/main.cpp jni/nv21_hooks.cpp)
 
 target_include_directories(virtualcam PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/jni
