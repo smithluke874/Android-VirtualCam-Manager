@@ -5,7 +5,7 @@
 
 Reimplements classic [android_virtual_cam](https://github.com/w2016561536/android_virtual_cam) control plane under Magisk+Zygisk. Frame injection uses the same algorithm (MediaPlayer surface + NV21 callbacks). **ArtHook** provides ART Java method replacement inside the Zygisk `.so` (no LSPosed).
 
-## Status (v1.13.0)
+## Status (v1.15.0)
 
 | Layer | Status |
 |-------|--------|
@@ -17,7 +17,9 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 | Method reflection scaffold | **Done** — `ready_for_arthook:N/6` |
 | **ArtHook ART hooks** (`setPreviewTexture` / `startPreview` / `setPreviewDisplay`) | **Done** (v1.13.0) |
 | MediaPlayer surface injection | **Done** — status `texture_swapped` → `surface_playing` |
-| NV21 PreviewCallback overwrite | **Next** (MediaCodec frame provider) |
+| **ArtHook** `setPreviewCallback*` + dynamic `onPreviewFrame` | **Done** (v1.15.0) |
+| NV21 buffer overwrite (pattern) | **Done** — status `nv21_cb_hooked` → `nv21_pattern:WxH#N` |
+| MediaCodec continuous video→NV21 | **Next** |
 | Camera2 surface redirect | Later |
 
 ## Download
@@ -25,7 +27,7 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 [Actions ← latest green run ← Artifacts](https://github.com/smithluke874/Android-VirtualCam-Manager/actions)
 
 - `VirtualCam-Manager-debug` / `release`
-- `VirtualCam-Manager-Magisk-v1.13.0` (includes Zygisk `.so` with ArtHook)
+- `VirtualCam-Manager-Magisk-v1.15.0` (includes Zygisk `.so` with ArtHook)
 
 ## Install & verify
 
@@ -34,8 +36,10 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 3. Media → pick image/video → one-tap import (encodes image → looping MP4 if needed)  
 4. Open a **Camera1** app → return Home → refresh  
    - **Zygisk .so installed** = green  
-   - **Hook: `art_hooked:N+jni:M`** or **`texture_swapped` / `surface_playing`** = ART + MediaPlayer path active  
-5. Apps that use `Camera.setPreviewTexture` + `startPreview` should show `virtual.mp4` on the preview surface.
+   - **Hook: `art_hooked:N+jni:M`** or **`texture_swapped` / `surface_playing`** = surface path active  
+   - **`nv21_cb_hooked` / `nv21_pattern:WxH#N`** = PreviewCallback NV21 path active  
+5. Apps that use `Camera.setPreviewTexture` + `startPreview` should show `virtual.mp4` on the preview surface.  
+6. Apps that process `onPreviewFrame` buffers receive patterned NV21 (video decoder next).
 
 ## Hook status values (written by Zygisk)
 
@@ -49,6 +53,9 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 | `texture_swapped` | `setPreviewTexture` replaced arg with fake ST |
 | `surface_playing` | MediaPlayer started on original surface/texture |
 | `inject_attempt_failed` | MediaPlayer prepare/start failed |
+| `nv21_cb_hooked:cb/buf/oneshot` | Dynamic onPreviewFrame hook installed |
+| `nv21_pattern:WxH#N` | NV21 pattern frames delivered to callback |
+| `nv21_cb_fail:*` | onPreviewFrame ArtHook install failed |
 | `arthook_init_fail` | ArtHook layout discovery failed on this ROM |
 | `hooked` / `hooked+ready:N` | JNI native hooks only (fallback) |
 
@@ -63,6 +70,8 @@ Zygisk .so  --reads-----------+  --writes--> hook_status / last_hook_pkg / versi
          |
          +-- ArtHook: Camera.setPreviewTexture → fake ST
          +-- ArtHook: Camera.startPreview → MediaPlayer(virtual.mp4)
+         +-- ArtHook: setPreviewCallback* → process_callback
+         +-- ArtHook: callback.onPreviewFrame → overwrite NV21 buffer
          +-- JNI native hooks (secondary)
 ```
 
