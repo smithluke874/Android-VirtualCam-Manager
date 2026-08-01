@@ -28,6 +28,7 @@ target_link_libraries(virtualcam PRIVATE
     arthook::arthook
     log
     dl
+    android
 )
 
 # Output name expected by Magisk packaging: libs/<abi>/libvirtualcam.so
