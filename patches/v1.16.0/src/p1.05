@@ -1,0 +1,6 @@
+        AMediaFormat_delete(fmt); AMediaExtractor_delete(ex);
+        video_mode_ = false; decoder_running_ = false; return;
+    }
+    AMediaFormat_delete(fmt);
+    AMediaCodec_start(codec);
+    LOGI("decoder: %s %dx%d -> %dx%d", mime, srcW, srcH, targetW, targetH);

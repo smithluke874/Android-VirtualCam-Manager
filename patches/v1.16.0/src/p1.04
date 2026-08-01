@@ -1,0 +1,28 @@
+        LOGE("decoder: video missing"); video_mode_ = false; decoder_running_ = false; return;
+    }
+    AMediaExtractor *ex = AMediaExtractor_new();
+    if (!ex || AMediaExtractor_setDataSource(ex, path.c_str()) != AMEDIA_OK) {
+        LOGE("decoder: extractor fail"); if (ex) AMediaExtractor_delete(ex);
+        video_mode_ = false; decoder_running_ = false; return;
+    }
+    int track = -1; AMediaFormat *fmt = nullptr; const char *mime = nullptr;
+    int32_t srcW = 0, srcH = 0;
+    for (int i = 0; i < AMediaExtractor_getTrackCount(ex); i++) {
+        AMediaFormat *f = AMediaExtractor_getTrackFormat(ex, i);
+        if (AMediaFormat_getString(f, AMEDIAFORMAT_KEY_MIME, &mime) && mime && strncmp(mime, "video/", 6) == 0) {
+            track = i; fmt = f; break;
+        }
+        AMediaFormat_delete(f);
+    }
+    if (track < 0 || !fmt) {
+        LOGE("decoder: no video track"); AMediaExtractor_delete(ex);
+        video_mode_ = false; decoder_running_ = false; return;
+    }
+    AMediaExtractor_selectTrack(ex, track);
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, &srcW);
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
+    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
+    AMediaCodec *codec = AMediaCodec_createDecoderByType(mime);
+    if (!codec || AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
+        LOGE("decoder: codec fail");
+        if (codec) AMediaCodec_delete(codec);

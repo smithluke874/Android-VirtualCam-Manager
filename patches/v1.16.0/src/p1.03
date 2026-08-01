@@ -1,0 +1,32 @@
+    if (!src || !dst || srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return;
+    if (srcStride <= 0) srcStride = srcW;
+    bool semi = (colorFormat == 21 || colorFormat == 0x7F420888 || colorFormat == 0x7F000789);
+    for (int dy = 0; dy < dstH; dy++) {
+        int sy = dy * srcH / dstH;
+        for (int dx = 0; dx < dstW; dx++)
+            dst[dy * dstW + dx] = src[sy * srcStride + (dx * srcW / dstW)];
+    }
+    uint8_t *dstUV = dst + (size_t)dstW * dstH;
+    for (int dy = 0; dy < dstH / 2; dy++) {
+        int sy = dy * (srcH / 2) / (dstH / 2);
+        for (int dx = 0; dx < dstW / 2; dx++) {
+            int sx = dx * (srcW / 2) / (dstW / 2);
+            uint8_t u, v;
+            if (semi) {
+                const uint8_t *uv = src + (size_t)srcStride * srcH + (size_t)sy * srcStride + (size_t)sx * 2;
+                u = uv[0]; v = uv[1];
+            } else {
+                const uint8_t *uP = src + (size_t)srcStride * srcH;
+                const uint8_t *vP = uP + (size_t)(srcW / 2) * (srcH / 2);
+                u = uP[sy * (srcW / 2) + sx];
+                v = vP[sy * (srcW / 2) + sx];
+            }
+            dstUV[dy * dstW + dx * 2] = v;
+            dstUV[dy * dstW + dx * 2 + 1] = u;
+        }
+    }
+}
+void Nv21FrameProvider::decoderLoop() {
+    std::string path; int targetW = 0, targetH = 0;
+    { std::lock_guard<std::mutex> lock(mu_); path = video_path_; targetW = w_; targetH = h_; }
+    if (path.empty() || !file_exists(path.c_str())) {
