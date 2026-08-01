@@ -37,7 +37,7 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
    - Flip **VirtualCam ON**
    - Open any camera app — done
 
-The Home screen always shows the next step in plain English. Technical details are behind **Show details**.
+The Home screen always shows the next step in plain English. While ON, status updates automatically every few seconds. Technical details are behind **Show details**.
 
 ## Hook status values (written by Zygisk)
 
@@ -54,6 +54,8 @@ The Home screen always shows the next step in plain English. Technical details a
 | `nv21_cb_hooked:cb/buf/oneshot` | Dynamic onPreviewFrame hook installed |
 | `nv21_pattern:WxH#N` | Pattern NV21 frames delivered to callback |
 | `nv21_video:WxH#N` | Real MediaCodec frames from virtual.mp4 delivered to callback |
+| `nv21_decoder_start` / `nv21_video_ready` | Decoder thread starting / ready |
+| `nv21_decoder_fail` | Decoder could not start — pattern fallback |
 | `nv21_cb_fail:*` | onPreviewFrame ArtHook install failed |
 | `arthook_init_fail` | ArtHook layout discovery failed on this ROM |
 | `hooked` / `hooked+ready:N` | JNI native hooks only (fallback) |
