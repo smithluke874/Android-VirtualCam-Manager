@@ -3,6 +3,12 @@
 set -e
 cd "$(dirname "$0")/../.."
 echo "=== assemble (v2-aware) ==="
+# v2.0.3-probe1 sources (doctor/probe) — apply first if complete chunks present
+if [ -f patches/v2.0.3/assemble.sh ]; then
+  chmod +x patches/v2.0.3/assemble.sh
+  bash patches/v2.0.3/assemble.sh || echo "v2.0.3 assemble skipped"
+fi
+
 
 # main.cpp version bump (legacy patch — skip if already v2)
 if [ -f patches/v1.16.0/main_v116.patch ]; then
