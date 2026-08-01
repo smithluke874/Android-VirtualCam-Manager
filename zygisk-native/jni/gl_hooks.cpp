@@ -1,18 +1,17 @@
 /*
- * VirtualCam v2 Phase 2 — GL bind/draw redirect + MediaCodec → RGB → GL texture.
+ * VirtualCam v2.0.2-dev Phase 2.1 — GL bind/draw redirect + MediaCodec
+ * + AHardwareBuffer / EGLImageOES path for samplerExternalOES.
  *
- * ShadowHook is dlopen'd at runtime so the .so always links. Texture upload
- * runs only when an EGL context is current (inside glBindTexture / glDraw*
- * proxies). Live telemetry is written to /data/adb/virtualcam/ for the Manager
- * APK (decoder_frames, texture_id, bind_hits).
+ * ShadowHook is dlopen'd at runtime. Texture upload runs only when an EGL
+ * context is current. Live telemetry → /data/adb/virtualcam/.
  *
- * Still not "done": device must show virtual feed in real camera apps.
- * Many apps use samplerExternalOES — Phase 2.1 (OES SurfaceTexture / EGLImage)
- * is required for those pipelines.
+ * Prefer EXTERNAL_OES + EGLImage when extensions are present; fall back to
+ * GL_TEXTURE_2D RGB upload. Device verification still required.
  */
 #include "gl_hooks.h"
 
 #include <android/log.h>
+#include <android/hardware_buffer.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -27,6 +26,7 @@
 #include <vector>
 
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
@@ -39,22 +39,31 @@
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+#ifndef EGL_NATIVE_BUFFER_ANDROID
+#define EGL_NATIVE_BUFFER_ANDROID 0x3140
+#endif
+#ifndef EGL_IMAGE_PRESERVED_KHR
+#define EGL_IMAGE_PRESERVED_KHR 0x30D2
+#endif
+
 namespace vcam {
 namespace {
 
-constexpr const char *kHookStatus = "/data/adb/virtualcam/hook_status";
-constexpr const char *kVideoPathA = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
-constexpr const char *kVideoPathB = "/data/adb/virtualcam/virtual.mp4";
-constexpr const char *kFramesPath = "/data/adb/virtualcam/decoder_frames";
-constexpr const char *kTexIdPath  = "/data/adb/virtualcam/texture_id";
+constexpr const char *kHookStatus   = "/data/adb/virtualcam/hook_status";
+constexpr const char *kVideoPathA   = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+constexpr const char *kVideoPathB   = "/data/adb/virtualcam/virtual.mp4";
+constexpr const char *kFramesPath   = "/data/adb/virtualcam/decoder_frames";
+constexpr const char *kTexIdPath    = "/data/adb/virtualcam/texture_id";
 constexpr const char *kBindHitsPath = "/data/adb/virtualcam/bind_hits";
-constexpr GLenum kExternalOes     = 0x8D65;
+constexpr const char *kPathModePath = "/data/adb/virtualcam/path_mode";
+constexpr GLenum kExternalOes       = 0x8D65;
 
 std::atomic<bool> g_enabled{false};
 std::atomic<bool> g_hooks_installed{false};
 std::atomic<bool> g_decoder_running{false};
 std::atomic<bool> g_decoder_ready{false};
 std::atomic<bool> g_stop{false};
+std::atomic<bool> g_oes_active{false};
 std::atomic<int>  g_frames{0};
 std::atomic<uint32_t> g_vtex{0};
 
@@ -62,12 +71,26 @@ std::mutex g_path_mu;
 std::string g_video_path;
 std::thread g_decoder_thread;
 
-/* Latest decoded RGB888 frame for GL upload (GL thread only reads under lock). */
 std::mutex g_frame_mu;
 std::vector<uint8_t> g_rgb;
 int g_rgb_w = 0, g_rgb_h = 0;
 std::atomic<int> g_rgb_gen{0};
 int g_uploaded_gen = -1;
+
+using eglCreateImageKHR_fn = EGLImageKHR (*)(EGLDisplay, EGLContext, EGLenum, EGLClientBuffer, const EGLint *);
+using eglDestroyImageKHR_fn = EGLBoolean (*)(EGLDisplay, EGLImageKHR);
+using eglGetNativeClientBufferANDROID_fn = EGLClientBuffer (*)(const AHardwareBuffer *);
+using glEGLImageTargetTexture2DOES_fn = void (*)(GLenum, GLintptr);
+eglCreateImageKHR_fn p_eglCreateImageKHR = nullptr;
+eglDestroyImageKHR_fn p_eglDestroyImageKHR = nullptr;
+eglGetNativeClientBufferANDROID_fn p_eglGetNativeClientBufferANDROID = nullptr;
+glEGLImageTargetTexture2DOES_fn p_glEGLImageTargetTexture2DOES = nullptr;
+bool g_egl_ext_tried = false;
+bool g_egl_ext_ok = false;
+
+AHardwareBuffer *g_hwbuf = nullptr;
+int g_hw_w = 0, g_hw_h = 0;
+EGLImageKHR g_egl_image = EGL_NO_IMAGE_KHR;
 
 using glBindTexture_fn = void (*)(GLenum, GLuint);
 using glDrawArrays_fn  = void (*)(GLenum, GLint, GLsizei);
@@ -80,7 +103,6 @@ void *g_draw_stub = nullptr;
 void *g_draw_el_stub = nullptr;
 void *g_shadow_lib = nullptr;
 
-/* Runtime ShadowHook API (optional). */
 using sh_init_fn = int (*)(int mode, bool debuggable);
 using sh_hook_fn = void *(*)(const char *lib, const char *sym, void *new_addr, void **orig);
 using sh_unhook_fn = int (*)(void *stub);
@@ -111,9 +133,18 @@ void write_num(const char *path, long long v) {
     }
 }
 
+void write_str(const char *path, const char *s) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+        if (s) write(fd, s, strlen(s));
+        close(fd);
+    }
+}
+
 void publish_telemetry() {
     write_num(kFramesPath, (long long)g_frames.load());
     write_num(kTexIdPath, (long long)g_vtex.load());
+    write_str(kPathModePath, g_oes_active.load() ? "oes" : "2d");
 }
 
 bool file_ok(const char *path) {
@@ -130,7 +161,6 @@ const char *resolve_video() {
     return nullptr;
 }
 
-/* NV12/NV21-ish semi-planar → RGB888 (nearest, crude but fine for spoof). */
 void yuv420sp_to_rgb(const uint8_t *src, int w, int h, int stride, bool nv21,
                      std::vector<uint8_t> &rgb) {
     if (w <= 0 || h <= 0 || !src) return;
@@ -167,7 +197,6 @@ void yuv420sp_to_rgb(const uint8_t *src, int w, int h, int stride, bool nv21,
     }
 }
 
-/* Color bars so bind redirects are visible even before the first decoded frame. */
 void fill_test_pattern(int w, int h, int gen, std::vector<uint8_t> &rgb) {
     if (w <= 0 || h <= 0) { w = 640; h = 480; }
     rgb.resize((size_t)w * (size_t)h * 3);
@@ -188,7 +217,152 @@ void fill_test_pattern(int w, int h, int gen, std::vector<uint8_t> &rgb) {
     }
 }
 
-/* Called only with a current EGL context. */
+bool ensure_egl_ext() {
+    if (g_egl_ext_tried) return g_egl_ext_ok;
+    g_egl_ext_tried = true;
+    p_eglCreateImageKHR = (eglCreateImageKHR_fn)eglGetProcAddress("eglCreateImageKHR");
+    p_eglDestroyImageKHR = (eglDestroyImageKHR_fn)eglGetProcAddress("eglDestroyImageKHR");
+    p_eglGetNativeClientBufferANDROID =
+        (eglGetNativeClientBufferANDROID_fn)eglGetProcAddress("eglGetNativeClientBufferANDROID");
+    p_glEGLImageTargetTexture2DOES =
+        (glEGLImageTargetTexture2DOES_fn)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    g_egl_ext_ok = p_eglCreateImageKHR && p_eglDestroyImageKHR &&
+                   p_eglGetNativeClientBufferANDROID && p_glEGLImageTargetTexture2DOES;
+    LOGI("EGL Image ext: create=%p ncb=%p target=%p ok=%d",
+         (void *)p_eglCreateImageKHR, (void *)p_eglGetNativeClientBufferANDROID,
+         (void *)p_glEGLImageTargetTexture2DOES, g_egl_ext_ok ? 1 : 0);
+    return g_egl_ext_ok;
+}
+
+void release_hw_image() {
+    if (g_egl_image != EGL_NO_IMAGE_KHR && p_eglDestroyImageKHR) {
+        EGLDisplay dpy = eglGetCurrentDisplay();
+        if (dpy != EGL_NO_DISPLAY)
+            p_eglDestroyImageKHR(dpy, g_egl_image);
+        g_egl_image = EGL_NO_IMAGE_KHR;
+    }
+    if (g_hwbuf) {
+        AHardwareBuffer_release(g_hwbuf);
+        g_hwbuf = nullptr;
+        g_hw_w = g_hw_h = 0;
+    }
+}
+
+bool ensure_hw_buffer(int w, int h) {
+    if (g_hwbuf && g_hw_w == w && g_hw_h == h) return true;
+    release_hw_image();
+    AHardwareBuffer_Desc desc{};
+    desc.width = (uint32_t)w;
+    desc.height = (uint32_t)h;
+    desc.layers = 1;
+    desc.format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    desc.usage = AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN |
+                 AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+    desc.stride = 0;
+    int rc = AHardwareBuffer_allocate(&desc, &g_hwbuf);
+    if (rc != 0 || !g_hwbuf) {
+        LOGW("AHardwareBuffer_allocate failed rc=%d", rc);
+        g_hwbuf = nullptr;
+        return false;
+    }
+    g_hw_w = w;
+    g_hw_h = h;
+    return true;
+}
+
+bool upload_oes(const uint8_t *rgb, int w, int h) {
+    if (!ensure_egl_ext()) return false;
+    if (!ensure_hw_buffer(w, h)) return false;
+
+    void *addr = nullptr;
+    int rc = AHardwareBuffer_lock(g_hwbuf, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+                                  -1, nullptr, &addr);
+    if (rc != 0 || !addr) {
+        LOGW("AHardwareBuffer_lock failed rc=%d", rc);
+        return false;
+    }
+
+    AHardwareBuffer_Desc desc{};
+    AHardwareBuffer_describe(g_hwbuf, &desc);
+    uint32_t stride = desc.stride ? desc.stride : (uint32_t)w;
+    auto *dst = static_cast<uint8_t *>(addr);
+    for (int y = 0; y < h; y++) {
+        uint8_t *row = dst + (size_t)y * stride * 4;
+        const uint8_t *src = rgb + (size_t)y * (size_t)w * 3;
+        for (int x = 0; x < w; x++) {
+            row[x * 4 + 0] = src[x * 3 + 0];
+            row[x * 4 + 1] = src[x * 3 + 1];
+            row[x * 4 + 2] = src[x * 3 + 2];
+            row[x * 4 + 3] = 255;
+        }
+    }
+    AHardwareBuffer_unlock(g_hwbuf, nullptr);
+
+    EGLDisplay dpy = eglGetCurrentDisplay();
+    if (dpy == EGL_NO_DISPLAY) return false;
+
+    if (g_egl_image != EGL_NO_IMAGE_KHR && p_eglDestroyImageKHR) {
+        p_eglDestroyImageKHR(dpy, g_egl_image);
+        g_egl_image = EGL_NO_IMAGE_KHR;
+    }
+
+    EGLint attrs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE};
+    EGLClientBuffer client = p_eglGetNativeClientBufferANDROID(g_hwbuf);
+    if (!client) {
+        LOGW("eglGetNativeClientBufferANDROID returned null");
+        return false;
+    }
+    g_egl_image = p_eglCreateImageKHR(
+        dpy, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, client, attrs);
+    if (g_egl_image == EGL_NO_IMAGE_KHR) {
+        LOGW("eglCreateImageKHR failed");
+        return false;
+    }
+
+    GLuint tex = g_vtex.load();
+    if (tex == 0) {
+        glGenTextures(1, &tex);
+        if (tex == 0) return false;
+        g_vtex = tex;
+        report("gl_tex_created_oes");
+        publish_telemetry();
+    }
+
+    glBindTexture(kExternalOes, tex);
+    glTexParameteri(kExternalOes, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(kExternalOes, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(kExternalOes, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(kExternalOes, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    p_glEGLImageTargetTexture2DOES(kExternalOes, (GLintptr)g_egl_image);
+
+    g_oes_active = true;
+    return true;
+}
+
+bool upload_2d(const uint8_t *rgb, int w, int h) {
+    GLuint tex = g_vtex.load();
+    if (tex == 0) {
+        glGenTextures(1, &tex);
+        if (tex == 0) return false;
+        g_vtex = tex;
+        report("gl_tex_created");
+        publish_telemetry();
+    }
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (g_uploaded_gen < 0 || !g_oes_active.load()) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb);
+    } else {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb);
+    }
+    g_oes_active = false;
+    return true;
+}
+
 void ensure_upload_texture() {
     if (eglGetCurrentContext() == EGL_NO_CONTEXT) return;
 
@@ -197,7 +371,6 @@ void ensure_upload_texture() {
     {
         std::lock_guard<std::mutex> lock(g_frame_mu);
         if (g_rgb.empty() || g_rgb_w <= 0 || g_rgb_h <= 0) {
-            /* Bootstrap with moving color bars so redirects are observable. */
             fill_test_pattern(640, 480, g_rgb_gen.load(), local);
             w = 640; h = 480;
             gen = g_rgb_gen.load();
@@ -210,27 +383,19 @@ void ensure_upload_texture() {
         }
     }
 
-    GLuint tex = g_vtex.load();
-    if (tex == 0) {
-        glGenTextures(1, &tex);
-        if (tex == 0) return;
-        g_vtex = tex;
-        report("gl_tex_created");
-        publish_telemetry();
-        LOGI("virtual texture id=%u", (unsigned)tex);
-    }
-
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (g_uploaded_gen < 0) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, local.data());
+    bool ok = upload_oes(local.data(), w, h);
+    if (!ok) {
+        static std::atomic<int> fb{0};
+        if (fb++ == 0) report("oes_fallback_2d");
+        ok = upload_2d(local.data(), w, h);
     } else {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, local.data());
+        static std::atomic<int> oe{0};
+        if (oe++ == 0) {
+            report("oes_ready");
+            publish_telemetry();
+        }
     }
-    g_uploaded_gen = gen;
+    if (ok) g_uploaded_gen = gen;
 }
 
 void hooked_glBindTexture(GLenum target, GLuint texture) {
@@ -378,7 +543,7 @@ void decoder_loop() {
         return;
     }
     AMediaExtractor_selectTrack(ex, track);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21); /* YUV420SemiPlanar */
+    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
 
     AMediaCodec *codec = AMediaCodec_createDecoderByType(mime);
     if (!codec || AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
@@ -494,6 +659,7 @@ void uninstall_gl_hooks() {
     }
     g_bind_stub = g_draw_stub = g_draw_el_stub = nullptr;
     g_hooks_installed = false;
+    release_hw_image();
 }
 
 void set_enabled(bool on) { g_enabled = on; }
@@ -524,5 +690,6 @@ void stop_decoder() {
 uint32_t virtual_texture_id() { return g_vtex.load(); }
 int decoder_frames() { return g_frames.load(); }
 bool decoder_ready() { return g_decoder_ready.load(); }
+bool oes_path_active() { return g_oes_active.load(); }
 
 }  // namespace vcam
