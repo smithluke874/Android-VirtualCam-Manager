@@ -1,0 +1,48 @@
+--- a/zygisk-native/jni/gl_hooks.cpp
++++ b/zygisk-native/jni/gl_hooks.cpp
+@@ -56,6 +56,10 @@ constexpr const char *kFramesPath   = "/data/adb/virtualcam/decoder_frames";
+ constexpr const char *kTexIdPath    = "/data/adb/virtualcam/texture_id";
+ constexpr const char *kBindHitsPath = "/data/adb/virtualcam/bind_hits";
+ constexpr const char *kPathModePath = "/data/adb/virtualcam/path_mode";
++constexpr const char *kDiagPath     = "/data/adb/virtualcam/diag";
++constexpr const char *kLastErrorPath = "/data/adb/virtualcam/last_error";
++constexpr const char *kCapsPath     = "/data/adb/virtualcam/capabilities";
++constexpr const char *kProbeReqPath = "/data/adb/virtualcam/probe_request";
+ constexpr GLenum kExternalOes       = 0x8D65;
+ 
+ std::atomic<bool> g_enabled{false};
+@@ -147,6 +151,9 @@ void publish_telemetry() {
+     write_str(kPathModePath, g_oes_active.load() ? "oes" : "2d");
+ }
+ 
++bool file_ok(const char *path);
++#include "vcam_probe.inc"
++
+ bool file_ok(const char *path) {
+     struct stat st{};
+     return path && path[0] && stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+@@ -364,6 +371,7 @@ bool upload_2d(const uint8_t *rgb, int w, int h) {
+ }
+ 
+ void ensure_upload_texture() {
++    run_probe_if_requested();
+     if (eglGetCurrentContext() == EGL_NO_CONTEXT) return;
+ 
+     std::vector<uint8_t> local;
+@@ -461,6 +469,8 @@ bool install_hooks_runtime() {
+     if (!load_shadowhook() || !p_sh_hook) {
+         LOGW("ShadowHook not available — hooks not installed");
+         report("gl_hook_pending_shadowhook");
++        write_error("shadowhook_missing");
++        write_diag("ShadowHook lib not found");
+         return false;
+     }
+     if (p_sh_init) {
+@@ -498,6 +508,7 @@ bool install_hooks_runtime() {
+ }
+ 
+ void decoder_loop() {
++    run_probe_if_requested();
+     const char *path = resolve_video();
+     if (!path) {
+         report("no_video");
