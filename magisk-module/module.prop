@@ -1,6 +1,6 @@
 id=virtualcam_manager
 name=VirtualCam Manager
-version=v2.0.0-dev
-versionCode=2002
+version=v2.0.1-dev
+versionCode=2003
 author=smithluke874
-description=Pure Magisk+Zygisk VirtualCam (NO LSPosed). v2 GL bind/draw hooks + MediaCodec RGB upload. Device verification required.
+description=Pure Magisk+Zygisk VirtualCam (NO LSPosed). v2 GL bind/draw hooks + MediaCodec RGB upload + live telemetry. Device verification required.
