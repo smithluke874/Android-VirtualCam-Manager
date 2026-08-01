@@ -12,8 +12,8 @@ android {
         applicationId = "com.virtualcam.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2004
-        versionName = "2.0.2-dev"
+        versionCode = 2005
+        versionName = "2.0.2-ci1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -58,6 +58,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.3")
