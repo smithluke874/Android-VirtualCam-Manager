@@ -2,13 +2,14 @@
 #include <cstdint>
 
 /**
- * OpenGL interception + MediaCodec (v2.0.2-dev Phase 2.1).
+ * OpenGL interception + MediaCodec (v2.0.3-probe1 Phase 2.1 + doctor/probe).
  * Honest status only until device verification of visible feed.
  *
  * Phase 2:   ShadowHook glBindTexture / glDraw* + YUV→RGB → GL_TEXTURE_2D
  * Phase 2.1: Prefer GL_TEXTURE_EXTERNAL_OES fed by AHardwareBuffer + EGLImageKHR
  *            (samplerExternalOES-compatible). Falls back to 2D when extensions
  *            or buffers are unavailable.
+ * Probe:     /data/adb/virtualcam/probe_request → diag + capabilities dump
  */
 namespace vcam {
 
