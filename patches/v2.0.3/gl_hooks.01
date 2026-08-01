@@ -1,96 +1,27 @@
- = nullptr;
-eglGetNativeClientBufferANDROID_fn p_eglGetNativeClientBufferANDROID = nullptr;
-glEGLImageTargetTexture2DOES_fn p_glEGLImageTargetTexture2DOES = nullptr;
-bool g_egl_ext_tried = false;
-bool g_egl_ext_ok = false;
+NATIVE_BUFFER_ANDROID
+#define EGL_NATIVE_BUFFER_ANDROID 0x3140
+#endif
+#ifndef EGL_IMAGE_PRESERVED_KHR
+#define EGL_IMAGE_PRESERVED_KHR 0x30D2
+#endif
 
-AHardwareBuffer *g_hwbuf = nullptr;
-int g_hw_w = 0, g_hw_h = 0;
-EGLImageKHR g_egl_image = EGL_NO_IMAGE_KHR;
+namespace vcam {
+namespace {
 
-using glBindTexture_fn = void (*)(GLenum, GLuint);
-using glDrawArrays_fn  = void (*)(GLenum, GLint, GLsizei);
-using glDrawElements_fn = void (*)(GLenum, GLsizei, GLenum, const void *);
-glBindTexture_fn orig_glBindTexture = nullptr;
-glDrawArrays_fn  orig_glDrawArrays  = nullptr;
-glDrawElements_fn orig_glDrawElements = nullptr;
-void *g_bind_stub = nullptr;
-void *g_draw_stub = nullptr;
-void *g_draw_el_stub = nullptr;
-void *g_shadow_lib = nullptr;
+constexpr const char *kHookStatus   = "/data/adb/virtualcam/hook_status";
+constexpr const char *kVideoPathA   = "/storage/emulated/0/DCIM/Camera1/virtual.mp4";
+constexpr const char *kVideoPathB   = "/data/adb/virtualcam/virtual.mp4";
+constexpr const char *kFramesPath   = "/data/adb/virtualcam/decoder_frames";
+constexpr const char *kTexIdPath    = "/data/adb/virtualcam/texture_id";
+constexpr const char *kBindHitsPath = "/data/adb/virtualcam/bind_hits";
+constexpr const char *kPathModePath = "/data/adb/virtualcam/path_mode";
+constexpr const char *kDiagPath     = "/data/adb/virtualcam/diag";
+constexpr const char *kLastErrorPath = "/data/adb/virtualcam/last_error";
+constexpr const char *kCapsPath     = "/data/adb/virtualcam/capabilities";
+constexpr const char *kProbeReqPath = "/data/adb/virtualcam/probe_request";
+constexpr GLenum kExternalOes       = 0x8D65;
 
-using sh_init_fn = int (*)(int mode, bool debuggable);
-using sh_hook_fn = void *(*)(const char *lib, const char *sym, void *new_addr, void **orig);
-using sh_unhook_fn = int (*)(void *stub);
-using sh_errno_fn = int (*)();
-using sh_errmsg_fn = const char *(*)(int);
-sh_init_fn  p_sh_init  = nullptr;
-sh_hook_fn  p_sh_hook  = nullptr;
-sh_unhook_fn p_sh_unhook = nullptr;
-sh_errno_fn  p_sh_errno  = nullptr;
-sh_errmsg_fn p_sh_errmsg = nullptr;
-
-void report(const char *status) {
-    int fd = open(kHookStatus, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (fd >= 0) {
-        if (status) write(fd, status, strlen(status));
-        close(fd);
-    }
-}
-
-void write_num(const char *path, long long v) {
-    char buf[32];
-    int n = snprintf(buf, sizeof(buf), "%lld", v);
-    if (n <= 0) return;
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (fd >= 0) {
-        write(fd, buf, (size_t)n);
-        close(fd);
-    }
-}
-
-void write_str(const char *path, const char *s) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (fd >= 0) {
-        if (s) write(fd, s, strlen(s));
-        close(fd);
-    }
-}
-
-void write_diag(const char *msg) {
-    write_str(kDiagPath, msg ? msg : "");
-}
-
-void write_error(const char *msg) {
-    write_str(kLastErrorPath, msg ? msg : "");
-}
-
-bool file_ok(const char *path);
-
-void publish_telemetry() {
-    write_num(kFramesPath, (long long)g_frames.load());
-    write_num(kTexIdPath, (long long)g_vtex.load());
-    write_str(kPathModePath, g_oes_active.load() ? "oes" : "2d");
-}
-
-void run_probe_if_requested() {
-    if (!file_ok(kProbeReqPath)) return;
-    unlink(kProbeReqPath);
-    char caps[256];
-    snprintf(caps, sizeof(caps),
-             "egl_image=%d ncb=%d target_oes=%d oes_active=%d hooks=%d decoder=%d "
-             "frames=%d tex=%u shadow=%d hwbuf=%d",
-             p_eglCreateImageKHR ? 1 : 0,
-             p_eglGetNativeClientBufferANDROID ? 1 : 0,
-             p_glEGLImageTargetTexture2DOES ? 1 : 0,
-             g_oes_active.load() ? 1 : 0,
-             g_hooks_installed.load() ? 1 : 0,
-             g_decoder_running.load() ? 1 : 0,
-             g_frames.load(),
-             (unsigned)g_vtex.load(),
-             g_shadow_lib ? 1 : 0,
-             g_hwbuf ? 1 : 0);
-    write_str(kCapsPath, caps);
-    char diag[384];
-    if (!g_hooks_installed.load() && !g_shadow_lib) {
-        snprintf(diag, sizeof(diag)
+std::atomic<bool> g_enabled{false};
+std::atomic<bool> g_hooks_installed{false};
+std::atomic<bool> g_decoder_running{false};
+std::atomic<bool> g_decoder_re
