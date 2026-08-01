@@ -1,0 +1,8 @@
+        AMediaFormat *f = AMediaExtractor_getTrackFormat(ex, i);
+        const char *m = nullptr;
+        if (AMediaFormat_getString(f, AMEDIAFORMAT_KEY_MIME, &m) && m && strncmp(m, "video/", 6) == 0) {
+            track = i;
+            fmt = f;
+            mime = m;
+            break;
+        }

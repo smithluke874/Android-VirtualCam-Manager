@@ -1,6 +1,46 @@
-        AMediaFormat_delete(fmt); AMediaExtractor_delete(ex);
-        video_mode_ = false; decoder_running_ = false; return;
+                const uint8_t *uP = src + (size_t)srcStride * (size_t)srcH;
+                const uint8_t *vP = uP + (size_t)srcUVW * (size_t)srcUVH;
+                u = uP[(size_t)sy * (size_t)srcUVW + (size_t)sx];
+                v = vP[(size_t)sy * (size_t)srcUVW + (size_t)sx];
+            }
+            // NV21 = V then U
+            dstUV[(size_t)dy * (size_t)dstW + (size_t)dx * 2]     = v;
+            dstUV[(size_t)dy * (size_t)dstW + (size_t)dx * 2 + 1] = u;
+        }
     }
-    AMediaFormat_delete(fmt);
-    AMediaCodec_start(codec);
-    LOGI("decoder: %s %dx%d -> %dx%d", mime, srcW, srcH, targetW, targetH);
+}
+
+void Nv21FrameProvider::decoderLoop() {
+    std::string path;
+    int targetW = 0, targetH = 0;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        path = video_path_;
+        targetW = w_;
+        targetH = h_;
+    }
+
+    const char *resolved = resolve_video_path(path.c_str());
+    if (!resolved) {
+        LOGE("decoder: video missing");
+        video_mode_ = false;
+        decoder_running_ = false;
+        return;
+    }
+    path = resolved;
+
+    AMediaExtractor *ex = AMediaExtractor_new();
+    if (!ex || AMediaExtractor_setDataSource(ex, path.c_str()) != AMEDIA_OK) {
+        LOGE("decoder: extractor fail path=%s", path.c_str());
+        if (ex) AMediaExtractor_delete(ex);
+        video_mode_ = false;
+        decoder_running_ = false;
+        return;
+    }
+
+    int track = -1;
+    AMediaFormat *fmt = nullptr;
+    const char *mime = nullptr;
+    int32_t srcW = 0, srcH = 0;
+
+    for (int i = 0; i < AMediaExtractor_getTrackCount(ex); i++) {

@@ -1,33 +1,38 @@
-                        convertToNv21(outBuf, srcW > 0 ? srcW : targetW, srcH > 0 ? srcH : targetH,
-                                      srcW > 0 ? srcW : targetW, colorFormat,
-                                      decode_buf_.data(), targetW, targetH);
-                        buf_.swap(decode_buf_);
-                        frame_count_++;
-                        frames++;
-                    }
-                }
-            }
-            AMediaCodec_releaseOutputBuffer(codec, outIdx, false);
-            errs = 0;
-        } else if (outIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
-            AMediaFormat *nf = AMediaCodec_getOutputFormat(codec);
-            if (nf) {
-                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_COLOR_FORMAT, &colorFormat);
-                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_WIDTH, &srcW);
-                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_HEIGHT, &srcH);
-                AMediaFormat_delete(nf);
-            }
-        } else if (outIdx != AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-            if (++errs > 40) break;
-        }
-        usleep(8000);
-    }
-    AMediaCodec_stop(codec); AMediaCodec_delete(codec); AMediaExtractor_delete(ex);
-    video_mode_ = false; decoder_running_ = false;
-    LOGI("decoder exited after %d frames", frames);
-}
+    int32_t colorFormat = 21;
+    int32_t stride = srcW > 0 ? srcW : targetW;
+    int frames = 0;
+    int errs = 0;
 
-static bool read_preview_size(JNIEnv *env, jobject camera, int *ow, int *oh) {
-    *ow = 0; *oh = 0;
-    if (!env || !camera) return false;
-    jclass camCls = env->GetObjectClass(camera);
+    while (!stop_flag_.load()) {
+        // Input
+        ssize_t inIdx = AMediaCodec_dequeueInputBuffer(codec, 2000);
+        if (inIdx >= 0) {
+            size_t bufSize = 0;
+            uint8_t *ibuf = AMediaCodec_getInputBuffer(codec, inIdx, &bufSize);
+            ssize_t sample = -1;
+            if (ibuf && bufSize > 0)
+                sample = AMediaExtractor_readSampleData(ex, ibuf, bufSize);
+
+            if (sample < 0) {
+                // Loop video
+                AMediaExtractor_seekTo(ex, 0, AMEDIAEXTRACTOR_SEEK_CLOSEST_SYNC);
+                sample = AMediaExtractor_readSampleData(ex, ibuf, bufSize);
+            }
+
+            if (sample >= 0) {
+                int64_t pts = AMediaExtractor_getSampleTime(ex);
+                AMediaCodec_queueInputBuffer(codec, inIdx, 0, (size_t)sample, pts, 0);
+                AMediaExtractor_advance(ex);
+            } else {
+                // Still nothing after seek — brief pause
+                AMediaCodec_queueInputBuffer(codec, inIdx, 0, 0, 0, 0);
+                usleep(30000);
+            }
+        }
+
+        // Output
+        AMediaCodecBufferInfo info{};
+        ssize_t outIdx = AMediaCodec_dequeueOutputBuffer(codec, &info, 2000);
+        if (outIdx >= 0) {
+            if (info.size > 0 && !(info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)) {
+                size_t outSize = 0;

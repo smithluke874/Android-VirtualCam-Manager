@@ -1,23 +1,28 @@
-    if (!camCls) { env->ExceptionClear(); return false; }
-    jmethodID getParams = env->GetMethodID(camCls, "getParameters", "()Landroid/hardware/Camera$Parameters;");
-    if (!getParams) { env->ExceptionClear(); env->DeleteLocalRef(camCls); return false; }
-    jobject params = env->CallObjectMethod(camera, getParams);
-    env->DeleteLocalRef(camCls);
-    if (!params || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-    jclass pCls = env->GetObjectClass(params);
-    jmethodID getSize = env->GetMethodID(pCls, "getPreviewSize", "()Landroid/hardware/Camera$Size;");
-    if (!getSize) { env->ExceptionClear(); env->DeleteLocalRef(pCls); env->DeleteLocalRef(params); return false; }
-    jobject sizeObj = env->CallObjectMethod(params, getSize);
-    env->DeleteLocalRef(pCls); env->DeleteLocalRef(params);
-    if (!sizeObj || env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-    jclass sizeCls = env->GetObjectClass(sizeObj);
-    jfieldID wf = env->GetFieldID(sizeCls, "width", "I");
-    jfieldID hf = env->GetFieldID(sizeCls, "height", "I");
-    if (wf && hf) { *ow = env->GetIntField(sizeObj, wf); *oh = env->GetIntField(sizeObj, hf); }
-    env->DeleteLocalRef(sizeCls); env->DeleteLocalRef(sizeObj);
-    return *ow > 0 && *oh > 0;
-}
-extern "C" void Hooked_onPreviewFrame(JNIEnv *env, jobject thiz, jbyteArray data, jobject camera) {
-    if (data && g_nv21.isReady()) {
-        g_nv21.copyInto(env, data);
-        if ((g_nv21.frames() % 30) == 1) {
+                uint8_t *outBuf = AMediaCodec_getOutputBuffer(codec, outIdx, &outSize);
+                if (outBuf && outSize > 0) {
+                    std::lock_guard<std::mutex> lock(mu_);
+                    size_t need = (size_t)targetW * (size_t)targetH * 3 / 2;
+                    if (decode_buf_.size() == need && buf_.size() == need) {
+                        convertToNv21(outBuf,
+                                      srcW > 0 ? srcW : targetW,
+                                      srcH > 0 ? srcH : targetH,
+                                      stride > 0 ? stride : (srcW > 0 ? srcW : targetW),
+                                      colorFormat,
+                                      decode_buf_.data(), targetW, targetH);
+                        buf_.swap(decode_buf_);
+                        frame_count_++;
+                        frames++;
+                    }
+                }
+            }
+            AMediaCodec_releaseOutputBuffer(codec, outIdx, false);
+            errs = 0;
+
+            // Soft pacing ~30 fps
+            if (frames > 0 && (frames % 2) == 0)
+                usleep(12000);
+        } else if (outIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+            AMediaFormat *nf = AMediaCodec_getOutputFormat(codec);
+            if (nf) {
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_COLOR_FORMAT, &colorFormat);
+                AMediaFormat_getInt32(nf, AMEDIAFORMAT_KEY_WIDTH, &srcW);
