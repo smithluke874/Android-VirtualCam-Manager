@@ -3,7 +3,11 @@
 
 /**
  * OpenGL interception + MediaCodec (v2.0.0-dev Phase 2).
- * Honest status only until device verification.
+ * Honest status only until device verification of visible feed.
+ *
+ * Current: ShadowHook glBindTexture / glDraw* + YUV→RGB upload to GL_TEXTURE_2D.
+ * Redirect EXTERNAL_OES binds to our texture when decoder is ready.
+ * Next: OES SurfaceTexture / ANativeWindow / EGLImage path for true external sampling.
  */
 namespace vcam {
 
