@@ -1,11 +1,11 @@
 #!/system/bin/sh
-ui_print "- VirtualCam Manager v2.0.0-dev (pure Magisk + Zygisk, NO LSPosed)"
+ui_print "- VirtualCam Manager v2.0.1-dev (pure Magisk + Zygisk, NO LSPosed)"
 ui_print "- Native OpenGL path — Magisk → Settings → Zygisk ON, then reboot"
 mkdir -p /data/adb/virtualcam
 chmod 755 /data/adb/virtualcam
 echo -n 0 > /data/adb/virtualcam/enabled
-echo -n "2.0.0-dev" > /data/adb/virtualcam/module_version
-echo -n "2.0.0-dev" > /data/adb/virtualcam/version
+echo -n "2.0.1-dev" > /data/adb/virtualcam/module_version
+echo -n "2.0.1-dev" > /data/adb/virtualcam/version
 touch /data/adb/virtualcam/module_installed
 chmod 644 /data/adb/virtualcam/* 2>/dev/null
 
