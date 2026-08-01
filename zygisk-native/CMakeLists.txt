@@ -29,6 +29,7 @@ target_link_libraries(virtualcam PRIVATE
     log
     dl
     android
+    mediandk
 )
 
 # Output name expected by Magisk packaging: libs/<abi>/libvirtualcam.so
