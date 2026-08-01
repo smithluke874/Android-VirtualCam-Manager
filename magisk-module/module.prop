@@ -3,4 +3,4 @@ name=VirtualCam Manager
 version=v2.0.3-probe1
 versionCode=2006
 author=smithluke874
-description=Pure Magisk+Zygisk VirtualCam (NO LSPosed). v2 GL OES/2D path (AHardwareBuffer+EGLImage) + MediaCodec + live telemetry + failure doctor/probe. Device verification required.
+description=Pure Magisk+Zygisk VirtualCam (NO LSPosed). v2 GL OES/2D path (AHardwareBuffer+EGLImage) + MediaCodec + live telemetry + failure doctor/probe + SurfaceTexture scaffolding. Device verification required.
