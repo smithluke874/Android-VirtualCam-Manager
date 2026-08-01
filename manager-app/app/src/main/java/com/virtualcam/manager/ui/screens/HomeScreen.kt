@@ -126,7 +126,6 @@ fun HomeScreen() {
                 else -> Triple("Ready", "Open any camera app. Status updates automatically.", true)
             }
 
-            // Primary guidance card
             Card(
                 M.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -147,7 +146,6 @@ fun HomeScreen() {
                 }
             }
 
-            // Big ON/OFF row
             Card(M.fillMaxWidth()) {
                 Row(
                     M.fillMaxWidth().padding(16.dp),
@@ -182,7 +180,6 @@ fun HomeScreen() {
                 }
             }
 
-            // One-tap media pick
             Button(
                 onClick = {
                     picker.launch(
