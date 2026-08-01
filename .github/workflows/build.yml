@@ -58,7 +58,7 @@ jobs:
           if-no-files-found: error
 
   build-magisk:
-    name: Package Magisk Module (+ Zygisk ArtHook)
+    name: Package Magisk Module (+ Zygisk ArtHook + MediaCodec)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,14 +90,17 @@ jobs:
           test -f zygisk-native/third_party/arthook/include/arthook/ArtHook.h
           test -f zygisk-native/third_party/arthook/src/hook/HookEngine.cpp
 
-      - name: Verify NV21 wiring present in main.cpp
+      - name: Verify NV21 + MediaCodec wiring
         run: |
           grep -n install_preview_callback_hooks zygisk-native/jni/main.cpp
           grep -n nv21_hooks.h zygisk-native/jni/main.cpp
           grep -n process_callback zygisk-native/jni/main.cpp
-          grep -n '1\.15\.0' zygisk-native/jni/main.cpp
+          grep -n '1\.16\.0' zygisk-native/jni/main.cpp
+          grep -n NdkMediaCodec zygisk-native/jni/nv21_hooks.cpp
+          grep -n mediandk zygisk-native/CMakeLists.txt
+          grep -n setVideoPath zygisk-native/jni/main.cpp
 
-      - name: Build Zygisk native with CMake + ArtHook
+      - name: Build Zygisk native with CMake + ArtHook + mediandk
         if: steps.setup-ndk.outcome == 'success'
         working-directory: zygisk-native
         run: |
@@ -133,13 +136,13 @@ jobs:
       - name: Package Magisk zip
         run: |
           cd magisk-module
-          zip -r ../VirtualCam-Manager-Magisk-v1.15.0.zip .
-          ls -la ../VirtualCam-Manager-Magisk-v1.15.0.zip
-          unzip -l ../VirtualCam-Manager-Magisk-v1.15.0.zip
+          zip -r ../VirtualCam-Manager-Magisk-v1.16.0.zip .
+          ls -la ../VirtualCam-Manager-Magisk-v1.16.0.zip
+          unzip -l ../VirtualCam-Manager-Magisk-v1.16.0.zip
 
       - name: Upload Magisk zip
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualCam-Manager-Magisk-v1.15.0
-          path: VirtualCam-Manager-Magisk-v1.15.0.zip
+          name: VirtualCam-Manager-Magisk-v1.16.0
+          path: VirtualCam-Manager-Magisk-v1.16.0.zip
           if-no-files-found: error
