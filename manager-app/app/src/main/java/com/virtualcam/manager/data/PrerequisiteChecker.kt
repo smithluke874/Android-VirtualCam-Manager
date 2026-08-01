@@ -18,7 +18,8 @@ data class PrerequisiteStatus(
     /** Live telemetry written by native GL path */
     val decoderFrames: Int = 0,
     val textureId: Long = 0,
-    val bindHits: Int = 0
+    val bindHits: Int = 0,
+    val pathMode: String? = null  // "oes" | "2d" | null
 ) {
     val allPassed: Boolean
         get() = rootAvailable && magiskPresent && camera1Ready
@@ -70,7 +71,6 @@ class PrerequisiteChecker(
         val camera1 = fileSystem.ensureGlobalCamera1()
         val control = RootShell.exec("mkdir -p /data/adb/virtualcam && echo 1").isSuccess
 
-        // Live telemetry from native (optional files — zero if absent)
         val frames = RootShell.exec(
             "cat /data/adb/virtualcam/decoder_frames 2>/dev/null || echo 0"
         ).out.firstOrNull()?.trim()?.toIntOrNull() ?: 0
@@ -82,6 +82,10 @@ class PrerequisiteChecker(
         val hits = RootShell.exec(
             "cat /data/adb/virtualcam/bind_hits 2>/dev/null || echo 0"
         ).out.firstOrNull()?.trim()?.toIntOrNull() ?: 0
+
+        val pathMode = RootShell.exec(
+            "cat /data/adb/virtualcam/path_mode 2>/dev/null"
+        ).out.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
         PrerequisiteStatus(
             rootAvailable = root,
@@ -97,7 +101,8 @@ class PrerequisiteChecker(
             hasVirtualVideo = hasVideo,
             decoderFrames = frames,
             textureId = texId,
-            bindHits = hits
+            bindHits = hits,
+            pathMode = pathMode
         )
     }
 }
