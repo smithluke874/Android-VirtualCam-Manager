@@ -28,18 +28,16 @@ Reimplements classic [android_virtual_cam](https://github.com/w2016561536/androi
 - `VirtualCam-Manager-debug` / `release`
 - `VirtualCam-Manager-Magisk-v1.16.0` (includes Zygisk `.so` with ArtHook + MediaCodec)
 
-## Install & verify
+## Install (3 steps)
 
-1. Magisk → **Zygisk ON** → flash Magisk zip → reboot  
-2. Install APK → grant root → Home **ON**  
-3. Media → pick image/video → one-tap import (encodes image → looping MP4 if needed)  
-4. Open a **Camera1** app → return Home → refresh  
-   - **Zygisk .so installed** = green  
-   - **Hook: `art_hooked:N+jni:M`** or **`texture_swapped` / `surface_playing`** = surface path active  
-   - **`nv21_cb_hooked` / `nv21_video:WxH#N`** = PreviewCallback path with real video frames  
-   - **`nv21_pattern:WxH#N`** = patterned fallback (decoder not started)  
-5. Apps that use `Camera.setPreviewTexture` + `startPreview` should show `virtual.mp4` on the preview surface.  
-6. Apps that process `onPreviewFrame` buffers receive real frames from `virtual.mp4` (MediaCodec), with patterned NV21 as fallback.
+1. **Magisk** → Settings → **Zygisk ON** → Modules → Install from storage → flash `VirtualCam-Manager-Magisk-v1.16.0.zip` → **reboot**
+2. Install the **Manager APK** → open it → **allow root** when Magisk asks
+3. On **Home**:
+   - Tap **Pick video or image** (images become a looping video automatically)
+   - Flip **VirtualCam ON**
+   - Open any camera app — done
+
+The Home screen always shows the next step in plain English. Technical details are behind **Show details**.
 
 ## Hook status values (written by Zygisk)
 

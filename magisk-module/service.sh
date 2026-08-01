@@ -10,7 +10,8 @@ restorecon -RF /data/adb/virtualcam 2>/dev/null
 chmod 644 /data/adb/virtualcam/enabled 2>/dev/null
 chmod 644 /data/adb/virtualcam/hook_status 2>/dev/null
 chmod 644 /data/adb/virtualcam/last_hook_pkg 2>/dev/null
-echo -n "1.15.0" > /data/adb/virtualcam/module_version
-echo -n "1.15.0" > /data/adb/virtualcam/version
+echo -n "1.16.0" > /data/adb/virtualcam/module_version
+echo -n "1.16.0" > /data/adb/virtualcam/version
 chmod 644 /data/adb/virtualcam/module_version 2>/dev/null
 chmod 644 /data/adb/virtualcam/version 2>/dev/null
+[ -f /data/adb/modules/virtualcam_manager/module.prop ] && touch /data/adb/virtualcam/module_installed
