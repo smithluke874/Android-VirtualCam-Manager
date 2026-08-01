@@ -1,36 +1,32 @@
 #!/bin/bash
 # v2.0.3-probe1 assemble — reassemble probe/doctor sources from chunks
+# Only overwrites tree files when reconstructed content has required symbols.
 set -e
 cd "$(dirname "$0")/../.."
 SRC=patches/v2.0.3
 echo "=== v2.0.3-probe1 assemble ==="
 
-if [ -f "$SRC/gl_hooks.00" ]; then
-  cat "$SRC"/gl_hooks.* > zygisk-native/jni/gl_hooks.cpp
-  echo "Assembled gl_hooks.cpp ($(wc -c < zygisk-native/jni/gl_hooks.cpp) bytes)"
-fi
-if [ -f "$SRC/homescreen.00" ]; then
-  cat "$SRC"/homescreen.* > manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt
-  echo "Assembled HomeScreen.kt ($(wc -c < manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt) bytes)"
-fi
-if [ -f "$SRC/prereq.00" ]; then
-  cat "$SRC"/prereq.* > manager-app/app/src/main/java/com/virtualcam/manager/data/PrerequisiteChecker.kt
-  echo "Assembled PrerequisiteChecker.kt"
-fi
-if [ -f "$SRC/targetapps.00" ]; then
-  cat "$SRC"/targetapps.* > manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/TargetAppsScreen.kt
-  echo "Assembled TargetAppsScreen.kt"
-fi
-if [ -f "$SRC/build_yml.00" ]; then
-  cat "$SRC"/build_yml.* > .github/workflows/build.yml
-  echo "Assembled build.yml"
-fi
-if [ -f "$SRC/readme.00" ]; then
-  cat "$SRC"/readme.* > README.md
-  echo "Assembled README.md"
-fi
+assemble_if_complete() {
+  local pattern="$1" dest="$2" needle="$3"
+  if ls "$SRC"/$pattern 1>/dev/null 2>&1; then
+    local tmp
+    tmp=$(mktemp)
+    cat "$SRC"/$pattern > "$tmp"
+    if grep -q "$needle" "$tmp" 2>/dev/null; then
+      cp "$tmp" "$dest"
+      echo "Assembled $dest ($(wc -c < "$dest") bytes)"
+    else
+      echo "SKIP $dest — chunks incomplete (missing $needle)"
+    fi
+    rm -f "$tmp"
+  fi
+}
 
-# Verify probe symbols
-grep -n 'run_probe_if_requested\|write_diag\|probe_request' zygisk-native/jni/gl_hooks.cpp | head -5 || true
-grep -n 'requestProbe\|Doctor\|pathMode' manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt | head -5 || true
+assemble_if_complete 'gl_hooks.*' zygisk-native/jni/gl_hooks.cpp 'run_probe_if_requested'
+assemble_if_complete 'homescreen.*' manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt 'requestProbe'
+assemble_if_complete 'prereq.*' manager-app/app/src/main/java/com/virtualcam/manager/data/PrerequisiteChecker.kt 'requestProbe'
+assemble_if_complete 'targetapps.*' manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/TargetAppsScreen.kt 'Roadmap'
+assemble_if_complete 'build_yml.*' .github/workflows/build.yml 'v2.0.3-probe1'
+assemble_if_complete 'readme.*' README.md 'Failure Doctor'
+
 echo "=== v2.0.3 assemble done ==="
