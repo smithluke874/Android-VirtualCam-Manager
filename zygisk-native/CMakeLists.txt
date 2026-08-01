@@ -24,6 +24,7 @@ target_compile_options(virtualcam PRIVATE
     -O2
 )
 
+# mediandk is linked so MediaCodec path can land without another CMake change
 target_link_libraries(virtualcam PRIVATE
     arthook::arthook
     log
@@ -32,7 +33,6 @@ target_link_libraries(virtualcam PRIVATE
     mediandk
 )
 
-# Output name expected by Magisk packaging: libs/<abi>/libvirtualcam.so
 set_target_properties(virtualcam PROPERTIES
     OUTPUT_NAME "virtualcam"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/libs/${ANDROID_ABI}"
