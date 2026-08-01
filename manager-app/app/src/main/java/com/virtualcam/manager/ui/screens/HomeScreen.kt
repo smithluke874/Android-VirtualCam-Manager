@@ -58,7 +58,6 @@ fun HomeScreen() {
         loading = false
     }
 
-    // Live status poll while enabled — keeps Home feeling alive
     LaunchedEffect(enabled) {
         while (enabled) {
             delay(1200)
@@ -123,6 +122,8 @@ fun HomeScreen() {
                 hook.startsWith("gl_hooked") ||
                 hook.startsWith("decoder_running") ||
                 hook.startsWith("gl_tex_created") ||
+                hook.startsWith("oes_ready") ||
+                hook.startsWith("oes_fallback") ||
                 frames > 0 ||
                 hits > 0 ||
                 hook.startsWith("nv21_video") ||
@@ -203,6 +204,16 @@ fun HomeScreen() {
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
                     )
+                    s?.pathMode?.let { mode ->
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(mode.uppercase()) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = if (mode == "oes") Success.copy(alpha = 0.22f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
                 }
             }
 
@@ -281,10 +292,10 @@ fun HomeScreen() {
                             style = MaterialTheme.typography.titleSmall
                         )
                         Text(
-                            "v2 intercepts OpenGL texture binds and uploads decoded frames. " +
-                                    "Many camera apps still use samplerExternalOES — if the preview " +
-                                    "stays black or real, that is expected until Phase 2.1 (OES SurfaceTexture). " +
-                                    "Watch Frames / Binds rise when you open a camera app.",
+                            "v2.0.2 tries GL_TEXTURE_EXTERNAL_OES via AHardwareBuffer + EGLImage " +
+                                    "(samplerExternalOES path). Falls back to 2D if extensions fail. " +
+                                    "Watch Frames / Binds rise; Status may show oes_ready or oes_fallback_2d. " +
+                                    "Device verification still required for a real camera spoof.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -330,12 +341,12 @@ fun HomeScreen() {
                 }
                 if (frames > 0 || texId > 0 || hits > 0) {
                     Text(
-                        "Telemetry: frames=$frames  texture=$texId  binds=$hits",
+                        "Telemetry: frames=$frames  texture=$texId  binds=$hits  path=${s.pathMode ?: "—"}",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
                 Text(
-                    "v2 uses native OpenGL interception (ShadowHook + MediaCodec). " +
+                    "v2 uses native OpenGL interception (ShadowHook + MediaCodec + OES/2D). " +
                             "Device verification is required before claiming a full camera spoof.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
