@@ -29,7 +29,7 @@ if ls "$SRC"/prereq_b64.* 1>/dev/null 2>&1; then
 fi
 
 # 3) FailureDoctorCard from b64
-if ls "$SRC"/doctor_b64.* 1>/dev/null 2>&1; then
+if false && ls "$SRC"/doctor_b64.* 1>/dev/null 2>&1; then
   B64=$(cat "$SRC"/doctor_b64.*)
   if echo "$B64" | base64 -d > /tmp/doctor_decoded.kt 2>/dev/null; then
     if grep -q 'FailureDoctorCard' /tmp/doctor_decoded.kt; then
@@ -42,7 +42,7 @@ fi
 
 # 4) Inject FailureDoctorCard call into HomeScreen if missing
 HS=manager-app/app/src/main/java/com/virtualcam/manager/ui/screens/HomeScreen.kt
-if [ -f "$HS" ] && ! grep -q 'FailureDoctorCard' "$HS" 2>/dev/null; then
+if false && [ -f "$HS" ] && ! grep -q 'FailureDoctorCard' "$HS" 2>/dev/null; then
   python3 - "$HS" <<'PY'
 import sys
 p = sys.argv[1]
