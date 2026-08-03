@@ -1,9 +1,6 @@
 package com.virtualcam.manager.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -75,8 +72,6 @@ fun FailureDoctorCard(
                     enabled = !busy && rootOk,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Filled.Science, contentDescription = "Probe")
-                    Spacer(Modifier.width(6.dp))
                     Text("Run Probe")
                 }
                 OutlinedButton(
@@ -84,8 +79,6 @@ fun FailureDoctorCard(
                     enabled = !busy,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                    Spacer(Modifier.width(6.dp))
                     Text("Refresh")
                 }
             }
