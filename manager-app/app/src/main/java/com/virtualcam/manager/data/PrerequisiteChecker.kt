@@ -3,6 +3,7 @@ package com.virtualcam.manager.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+
 data class PrerequisiteStatus(
     val rootAvailable: Boolean = false,
     val magiskPresent: Boolean = false,
